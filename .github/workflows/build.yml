@@ -1,0 +1,26 @@
+name: Build BFN Exporter
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Build EXE
+        run: dotnet publish BFN_Exporter.csproj -c Release -r win-x64 --self-contained true /p:PublishSingleFile=true
+
+      - name: Upload EXE
+        uses: actions/upload-artifact@v4
+        with:
+          name: BFN_Exporter_Windows
+          path: bin/Release/net8.0-windows/win-x64/publish/BFN_Exporter.exe
