@@ -2,6 +2,7 @@ using System;
 using System.Drawing;
 using System.IO;
 using System.Runtime.InteropServices;
+using System.Text;
 using System.Text.Json;
 using System.Collections.Generic;
 using System.Threading;
@@ -31,38 +32,50 @@ public sealed class MainForm : Form
         UIntPtr dwExtraInfo);
 
     [DllImport("user32.dll")]
-    private static extern IntPtr GetForegroundWindow();
-
-    [DllImport("user32.dll")]
-    private static extern IntPtr GetFocus();
-
-    [DllImport("user32.dll")]
-    private static extern uint GetWindowThreadProcessId(
-        IntPtr hWnd,
-        IntPtr processId);
-
-    [DllImport("user32.dll")]
-    private static extern bool AttachThreadInput(
-        uint idAttach,
-        uint idAttachTo,
-        bool fAttach);
-
-    [DllImport("user32.dll")]
-    private static extern IntPtr SendMessage(
-        IntPtr hWnd,
-        uint Msg,
-        IntPtr wParam,
-        IntPtr lParam);
+    private static extern uint SendInput(
+        uint nInputs,
+        INPUT[] pInputs,
+        int cbSize);
 
     private const uint MOUSEEVENTF_LEFTDOWN = 0x0002;
     private const uint MOUSEEVENTF_LEFTUP = 0x0004;
-    private const uint WM_PASTE = 0x0302;
+
+    private const uint INPUT_KEYBOARD = 1;
+
+    private const uint KEYEVENTF_UNICODE = 0x0004;
+    private const uint KEYEVENTF_KEYUP = 0x0002;
+
+    private const ushort VK_SHIFT = 0x10;
 
     [StructLayout(LayoutKind.Sequential)]
     private struct POINT
     {
         public int X;
         public int Y;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct INPUT
+    {
+        public uint type;
+        public InputUnion U;
+    }
+
+    [StructLayout(LayoutKind.Explicit)]
+    private struct InputUnion
+    {
+        [FieldOffset(0)]
+        public KEYBDINPUT ki;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct KEYBDINPUT
+    {
+        public ushort wVk;
+        public ushort wScan;
+        public uint dwFlags;
+        public uint time;
+        public UIntPtr dwExtraInfo;
     }
 
     private readonly string[] pointNames =
@@ -107,7 +120,6 @@ public sealed class MainForm : Form
     public MainForm()
     {
         Text = "BFN Exporter — ПК №1";
-
         Width = 760;
         Height = 520;
 
@@ -125,12 +137,9 @@ public sealed class MainForm : Form
 
         mousePosition.Dock =
             DockStyle.Top;
-
         mousePosition.Height = 40;
-
         mousePosition.Font =
             new Font("Segoe UI", 11);
-
         mousePosition.TextAlign =
             ContentAlignment.MiddleCenter;
 
@@ -142,23 +151,17 @@ public sealed class MainForm : Form
 
         exportButton.Text =
             "▶ Запустить экспорт";
-
         exportButton.Dock =
             DockStyle.Bottom;
-
         exportButton.Height = 50;
-
         exportButton.Click +=
             (_, _) => ProductionExport();
 
         setupButton.Text =
             "⚙ Настроить координаты";
-
         setupButton.Dock =
             DockStyle.Bottom;
-
         setupButton.Height = 50;
-
         setupButton.Click +=
             (_, _) => StartSetup();
 
@@ -211,7 +214,6 @@ public sealed class MainForm : Form
             setupIndex >= 0)
         {
             e.SuppressKeyPress = true;
-
             CapturePoint();
         }
 
@@ -251,14 +253,10 @@ public sealed class MainForm : Form
     {
         if (setupIndex < 0 ||
             setupIndex >= pointNames.Length)
-        {
             return;
-        }
 
         if (!GetCursorPos(out POINT p))
-        {
             return;
-        }
 
         string name =
             pointNames[setupIndex];
@@ -313,26 +311,19 @@ public sealed class MainForm : Form
     {
         try
         {
-            if (!File.Exists(
-                SettingsFile))
-            {
+            if (!File.Exists(SettingsFile))
                 return;
-            }
 
             string json =
-                File.ReadAllText(
-                    SettingsFile);
+                File.ReadAllText(SettingsFile);
 
-            Dictionary<string, Point>?
-                loaded =
+            Dictionary<string, Point>? loaded =
                 JsonSerializer.Deserialize<
                     Dictionary<string, Point>>(
                         json);
 
             if (loaded == null)
-            {
                 return;
-            }
 
             foreach (var item in loaded)
             {
@@ -340,8 +331,7 @@ public sealed class MainForm : Form
                     item.Value;
             }
 
-            Log(
-                "Координаты загружены.");
+            Log("Координаты загружены.");
         }
         catch (Exception ex)
         {
@@ -387,112 +377,88 @@ public sealed class MainForm : Form
         Thread.Sleep(800);
     }
 
-    private void ReplaceFileName(
-        string fileName)
+    private void SendUnicodeText(string text)
     {
-        Log(
-            "Очищаем старое имя файла.");
+        foreach (char c in text)
+        {
+            ushort code = c;
 
-        // Курсор в начало имени.
+            INPUT down = new INPUT
+            {
+                type = INPUT_KEYBOARD,
+                U = new InputUnion
+                {
+                    ki = new KEYBDINPUT
+                    {
+                        wVk = 0,
+                        wScan = code,
+                        dwFlags = KEYEVENTF_UNICODE,
+                        time = 0,
+                        dwExtraInfo = UIntPtr.Zero
+                    }
+                }
+            };
+
+            INPUT up = new INPUT
+            {
+                type = INPUT_KEYBOARD,
+                U = new InputUnion
+                {
+                    ki = new KEYBDINPUT
+                    {
+                        wVk = 0,
+                        wScan = code,
+                        dwFlags =
+                            KEYEVENTF_UNICODE |
+                            KEYEVENTF_KEYUP,
+                        time = 0,
+                        dwExtraInfo = UIntPtr.Zero
+                    }
+                }
+            };
+
+            SendInput(
+                1,
+                new[] { down },
+                Marshal.SizeOf<INPUT>());
+
+            SendInput(
+                1,
+                new[] { up },
+                Marshal.SizeOf<INPUT>());
+
+            Thread.Sleep(10);
+        }
+    }
+
+    private void ReplaceFileName(string fileName)
+    {
+        Log("Очищаем старое имя файла.");
+
+        // Переходим в начало поля.
         SendKeys.SendWait("{HOME}");
 
         Thread.Sleep(300);
 
-        // Выделяем всё до конца.
+        // Выделяем всё содержимое.
         SendKeys.SendWait("+{END}");
 
         Thread.Sleep(300);
 
         // Удаляем старое имя.
-        SendKeys.SendWait(
-            "{BACKSPACE}");
+        SendKeys.SendWait("{BACKSPACE}");
 
         Thread.Sleep(500);
 
-        Log(
-            "Старое имя удалено.");
+        Log("Старое имя удалено.");
 
-        // Кладём новое имя
-        // в буфер обмена.
-        Clipboard.SetText(
-            fileName);
+        // Вводим новое имя напрямую
+        // через Windows Unicode input.
+        SendUnicodeText(fileName);
 
-        Thread.Sleep(500);
+        Thread.Sleep(1000);
 
-        IntPtr foregroundWindow =
-            GetForegroundWindow();
-
-        uint foregroundThread =
-            GetWindowThreadProcessId(
-                foregroundWindow,
-                IntPtr.Zero);
-
-        uint currentThread =
-            GetWindowThreadProcessId(
-                Handle,
-                IntPtr.Zero);
-
-        bool attached = false;
-
-        try
-        {
-            if (foregroundThread !=
-                currentThread)
-            {
-                attached =
-                    AttachThreadInput(
-                        currentThread,
-                        foregroundThread,
-                        true);
-            }
-
-            IntPtr focusedControl =
-                GetFocus();
-
-            if (focusedControl !=
-                IntPtr.Zero)
-            {
-                Log(
-                    "Вставляем новое имя.");
-
-                SendMessage(
-                    focusedControl,
-                    WM_PASTE,
-                    IntPtr.Zero,
-                    IntPtr.Zero);
-            }
-            else
-            {
-                Log(
-                    "Фокус не найден. Используем Ctrl+V.");
-
-                SendKeys.SendWait(
-                    "^v");
-            }
-
-            Thread.Sleep(1000);
-        }
-        finally
-        {
-            if (attached)
-            {
-                AttachThreadInput(
-                    currentThread,
-                    foregroundThread,
-                    false);
-            }
-
-            try
-            {
-                Clipboard.Clear();
-            }
-            catch
-            {
-            }
-        }
-
-        Log(
-            "Новое имя введено.");
+        Log("Новое имя введено.");
     }
 
     private void ProductionExport()
@@ -527,8 +493,7 @@ public sealed class MainForm : Form
             string folder =
                 Path.Combine(
                     @"C:\Отчеты",
-                    today.ToString(
-                        "yyyy_MM"));
+                    today.ToString("yyyy_MM"));
 
             string fileName =
                 $"{yesterday:yyyy_MM_dd} " +
@@ -560,8 +525,7 @@ public sealed class MainForm : Form
 
             Thread.Sleep(500);
 
-            // Полностью заменяем
-            // старое имя.
+            // Заменяем старое имя.
             ReplaceFileName(
                 fileName);
 
@@ -569,11 +533,10 @@ public sealed class MainForm : Form
             ClickPoint(
                 "Сохранить");
 
-            // Ждём окно
-            // "посмотреть файл".
+            // Ждём окно после сохранения.
             Thread.Sleep(1800);
 
-            // Нажимаем Нет.
+            // Нет.
             ClickPoint("Нет");
 
             Thread.Sleep(1000);
