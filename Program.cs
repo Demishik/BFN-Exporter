@@ -295,118 +295,103 @@ public sealed class MainForm : Form
     }
 
     private void ProductionExport()
+{
+    if (points.Count != pointNames.Length)
     {
-        if (points.Count != pointNames.Length)
-        {
-            MessageBox.Show(
-                "Сначала настрой координаты.",
-                "BFN Exporter",
-                MessageBoxButtons.OK,
-                MessageBoxIcon.Warning);
+        MessageBox.Show(
+            "Сначала настрой координаты.",
+            "BFN Exporter",
+            MessageBoxButtons.OK,
+            MessageBoxIcon.Warning);
 
-            return;
-        }
-
-        exportButton.Enabled = false;
-        setupButton.Enabled = false;
-
-        try
-        {
-            Log("");
-            Log("=== НАЧАЛО ЭКСПОРТА ПРОИЗВОДСТВА ===");
-
-            DateTime today = DateTime.Today;
-            DateTime yesterday = today.AddDays(-1);
-
-            string folder = Path.Combine(
-                @"C:\Отчеты",
-                today.ToString("yyyy_MM"));
-
-            string fileName =
-                $"{yesterday:yyyy_MM_dd} " +
-                $"Катковка Р-3 Производственный отчет.xlsx";
-
-            Log($"Файл: {fileName}");
-            Log($"Папка: {folder}");
-
-            /*
-             * 1. Выбираем вкладку Отчет Производство
-             */
-            ClickPoint("Отчет Производство");
-
-            /*
-             * 2. Открываем меню Файл
-             */
-            ClickPoint("Файл");
-
-            /*
-             * 3. Нажимаем Экспорт
-             */
-            ClickPoint("Экспорт");
-
-            /*
-             * Ждём появления окна сохранения.
-             */
-            Thread.Sleep(2000);
-
-            /*
-             * 4. Поле имени файла
-             */
-            ClickPoint("Поле имени файла");
-
-            Thread.Sleep(300);
-
-            /*
-             * Выделяем существующее имя.
-             */
-            SendKeys.SendWait("^a");
-
-            Thread.Sleep(200);
-
-            /*
-             * Вводим новое имя.
-             */
-            SendKeys.SendWait(fileName);
-
-            Thread.Sleep(500);
-
-            /*
-             * 5. Нажимаем Сохранить
-             */
-            ClickPoint("Сохранить");
-
-            Thread.Sleep(1500);
-
-            Log("Экспорт производства завершён.");
-            Log("=== КОНЕЦ ===");
-
-            MessageBox.Show(
-                "Тестовый экспорт производства завершён.",
-                "BFN Exporter",
-                MessageBoxButtons.OK,
-                MessageBoxIcon.Information);
-        }
-        catch (Exception ex)
-        {
-            Log("ОШИБКА: " + ex.Message);
-
-            MessageBox.Show(
-                ex.Message,
-                "Ошибка BFN Exporter",
-                MessageBoxButtons.OK,
-                MessageBoxIcon.Error);
-        }
-        finally
-        {
-            exportButton.Enabled = true;
-            setupButton.Enabled = true;
-        }
+        return;
     }
 
-    private void Log(string text)
+    exportButton.Enabled = false;
+    setupButton.Enabled = false;
+
+    try
     {
-        log.AppendText(
-            $"{DateTime.Now:HH:mm:ss}  {text}" +
-            Environment.NewLine);
+        Log("");
+        Log("=== НАЧАЛО ЭКСПОРТА ПРОИЗВОДСТВА ===");
+
+        DateTime today = DateTime.Today;
+        DateTime yesterday = today.AddDays(-1);
+
+        string folder = Path.Combine(
+            @"C:\Отчеты",
+            today.ToString("yyyy_MM"));
+
+        string fileName =
+            $"{yesterday:yyyy_MM_dd} " +
+            $"Катковка Р-3 Производственный отчет.xlsx";
+
+        Log($"Папка: {folder}");
+        Log($"Имя файла: {fileName}");
+
+        // 1. Отчет Производство
+        ClickPoint("Отчет Производство");
+
+        // 2. Файл
+        ClickPoint("Файл");
+
+        // 3. Экспорт
+        ClickPoint("Экспорт");
+
+        // Ждём окно сохранения
+        Thread.Sleep(2000);
+
+        // 4. Поле имени файла
+        ClickPoint("Поле имени файла");
+
+        Thread.Sleep(300);
+
+        // Гарантированно выделяем всё старое имя
+        SendKeys.SendWait("^a");
+        Thread.Sleep(300);
+
+        // Удаляем старое имя
+        SendKeys.SendWait("{BACKSPACE}");
+        Thread.Sleep(300);
+
+        // Вводим новое имя
+        SendKeys.SendWait(fileName);
+        Thread.Sleep(500);
+
+        // 5. Сохранить
+        ClickPoint("Сохранить");
+
+        // Ждём окно "посмотреть сохранённый файл?"
+        Thread.Sleep(1500);
+
+        // 6. Нажимаем НЕТ
+        ClickPoint("Нет");
+
+        Thread.Sleep(1000);
+
+        Log("Производственный отчёт сохранён.");
+        Log("Окно просмотра закрыто кнопкой «Нет».");
+        Log("=== КОНЕЦ ===");
+
+        MessageBox.Show(
+            "Производственный отчёт сохранён.",
+            "BFN Exporter",
+            MessageBoxButtons.OK,
+            MessageBoxIcon.Information);
+    }
+    catch (Exception ex)
+    {
+        Log("ОШИБКА: " + ex.Message);
+
+        MessageBox.Show(
+            ex.Message,
+            "Ошибка BFN Exporter",
+            MessageBoxButtons.OK,
+            MessageBoxIcon.Error);
+    }
+    finally
+    {
+        exportButton.Enabled = true;
+        setupButton.Enabled = true;
     }
 }
