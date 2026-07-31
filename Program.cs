@@ -19,6 +19,10 @@ internal static class Program
 
 public sealed class MainForm : Form
 {
+    // =========================================================
+    // WINDOWS API
+    // =========================================================
+
     [DllImport("user32.dll")]
     private static extern bool GetCursorPos(out POINT p);
 
@@ -30,8 +34,20 @@ public sealed class MainForm : Form
         uint dwData,
         UIntPtr dwExtraInfo);
 
+    [DllImport("user32.dll")]
+    private static extern IntPtr LoadKeyboardLayout(
+        string pwszKLID,
+        uint Flags);
+
+    [DllImport("user32.dll")]
+    private static extern IntPtr ActivateKeyboardLayout(
+        IntPtr hkl,
+        uint Flags);
+
     private const uint MOUSEEVENTF_LEFTDOWN = 0x0002;
     private const uint MOUSEEVENTF_LEFTUP = 0x0004;
+
+    private const uint KLF_ACTIVATE = 0x00000001;
 
     [StructLayout(LayoutKind.Sequential)]
     private struct POINT
@@ -39,6 +55,10 @@ public sealed class MainForm : Form
         public int X;
         public int Y;
     }
+
+    // =========================================================
+    // КООРДИНАТЫ
+    // =========================================================
 
     private readonly string[] pointNames =
     {
@@ -54,6 +74,10 @@ public sealed class MainForm : Form
 
     private readonly Dictionary<string, Point> points = new();
 
+    // =========================================================
+    // ЭЛЕМЕНТЫ ОКНА
+    // =========================================================
+
     private readonly Label instruction = new();
     private readonly Label mousePosition = new();
     private readonly TextBox log = new();
@@ -61,6 +85,10 @@ public sealed class MainForm : Form
     private readonly Button exportButton = new();
 
     private int setupIndex = -1;
+
+    // =========================================================
+    // ФАЙЛ НАСТРОЕК
+    // =========================================================
 
     private string SettingsFile
     {
@@ -79,9 +107,14 @@ public sealed class MainForm : Form
         }
     }
 
+    // =========================================================
+    // КОНСТРУКТОР
+    // =========================================================
+
     public MainForm()
     {
         Text = "BFN Exporter — ПК №1";
+
         Width = 760;
         Height = 520;
 
@@ -89,6 +122,10 @@ public sealed class MainForm : Form
             FormStartPosition.CenterScreen;
 
         KeyPreview = true;
+
+        // -----------------------------------------------------
+        // Инструкция
+        // -----------------------------------------------------
 
         instruction.Dock = DockStyle.Top;
         instruction.Height = 75;
@@ -98,20 +135,34 @@ public sealed class MainForm : Form
         instruction.TextAlign =
             ContentAlignment.MiddleCenter;
 
+        // -----------------------------------------------------
+        // Координаты мыши
+        // -----------------------------------------------------
+
         mousePosition.Dock =
             DockStyle.Top;
+
         mousePosition.Height = 40;
+
         mousePosition.Font =
             new Font("Segoe UI", 11);
 
         mousePosition.TextAlign =
             ContentAlignment.MiddleCenter;
 
+        // -----------------------------------------------------
+        // Журнал
+        // -----------------------------------------------------
+
         log.Multiline = true;
         log.ReadOnly = true;
         log.Dock = DockStyle.Fill;
         log.ScrollBars =
             ScrollBars.Vertical;
+
+        // -----------------------------------------------------
+        // Кнопка экспорта
+        // -----------------------------------------------------
 
         exportButton.Text =
             "▶ Запустить экспорт 3 отчётов";
@@ -124,6 +175,10 @@ public sealed class MainForm : Form
         exportButton.Click +=
             (_, _) => ExportAllReports();
 
+        // -----------------------------------------------------
+        // Кнопка настройки
+        // -----------------------------------------------------
+
         setupButton.Text =
             "⚙ Настроить координаты";
 
@@ -135,6 +190,10 @@ public sealed class MainForm : Form
         setupButton.Click +=
             (_, _) => StartSetup();
 
+        // -----------------------------------------------------
+        // Добавляем элементы
+        // -----------------------------------------------------
+
         Controls.Add(log);
         Controls.Add(exportButton);
         Controls.Add(setupButton);
@@ -142,6 +201,10 @@ public sealed class MainForm : Form
         Controls.Add(instruction);
 
         KeyDown += MainForm_KeyDown;
+
+        // -----------------------------------------------------
+        // Таймер координат мыши
+        // -----------------------------------------------------
 
         System.Windows.Forms.Timer timer =
             new System.Windows.Forms.Timer();
@@ -159,9 +222,14 @@ public sealed class MainForm : Form
 
         timer.Start();
 
+        // -----------------------------------------------------
+        // Загружаем сохранённые координаты
+        // -----------------------------------------------------
+
         LoadCoordinates();
 
-        if (points.Count == pointNames.Length)
+        if (points.Count ==
+            pointNames.Length)
         {
             instruction.Text =
                 "Координаты загружены. Можно запускать экспорт.";
@@ -172,8 +240,13 @@ public sealed class MainForm : Form
                 "Нажми «Настроить координаты».";
         }
 
-        Log("BFN Exporter ПК №1 запущен.");
+        Log(
+            "BFN Exporter ПК №1 запущен.");
     }
+
+    // =========================================================
+    // КЛАВИАТУРА
+    // =========================================================
 
     private void MainForm_KeyDown(
         object? sender,
@@ -183,6 +256,7 @@ public sealed class MainForm : Form
             setupIndex >= 0)
         {
             e.SuppressKeyPress = true;
+
             CapturePoint();
         }
 
@@ -197,9 +271,14 @@ public sealed class MainForm : Form
             instruction.Text =
                 "Настройка отменена.";
 
-            Log("Настройка отменена.");
+            Log(
+                "Настройка отменена.");
         }
     }
+
+    // =========================================================
+    // НАСТРОЙКА КООРДИНАТ
+    // =========================================================
 
     private void StartSetup()
     {
@@ -213,9 +292,14 @@ public sealed class MainForm : Form
         instruction.Text =
             $"Наведи мышь на «{pointNames[0]}» и нажми F8.";
 
-        Log("Настройка координат начата.");
-        Log("F8 — сохранить текущую позицию мыши.");
-        Log("ESC — отменить.");
+        Log(
+            "Настройка координат начата.");
+
+        Log(
+            "F8 — сохранить текущую позицию мыши.");
+
+        Log(
+            "ESC — отменить.");
     }
 
     private void CapturePoint()
@@ -264,6 +348,10 @@ public sealed class MainForm : Form
             $"Наведи мышь на «{pointNames[setupIndex]}» и нажми F8.";
     }
 
+    // =========================================================
+    // СОХРАНЕНИЕ КООРДИНАТ
+    // =========================================================
+
     private void SaveCoordinates()
     {
         string json =
@@ -278,6 +366,10 @@ public sealed class MainForm : Form
             SettingsFile,
             json);
     }
+
+    // =========================================================
+    // ЗАГРУЗКА КООРДИНАТ
+    // =========================================================
 
     private void LoadCoordinates()
     {
@@ -308,7 +400,8 @@ public sealed class MainForm : Form
                     item.Value;
             }
 
-            Log("Координаты загружены.");
+            Log(
+                "Координаты загружены.");
         }
         catch (Exception ex)
         {
@@ -317,6 +410,10 @@ public sealed class MainForm : Form
                 ex.Message);
         }
     }
+
+    // =========================================================
+    // КЛИК ПО КООРДИНАТЕ
+    // =========================================================
 
     private void ClickPoint(string name)
     {
@@ -354,88 +451,152 @@ public sealed class MainForm : Form
         Thread.Sleep(1000);
     }
 
-    // -------------------------------------------------
-    // ВВОД НОВОГО ИМЕНИ
-    // -------------------------------------------------
-    //
-    // Старое имя удаляем проверенным способом:
-    //
-    // HOME -> SHIFT+END -> BACKSPACE
-    //
-    // Новое имя вводим по частям.
-    // Это позволяет корректно обработать
-    // английское "Damate qlik".
-    //
-    private void ReplaceFileName(string fileName)
+    // =========================================================
+    // ПЕРЕКЛЮЧЕНИЕ НА РУССКУЮ РАСКЛАДКУ
+    // =========================================================
+
+    private void SwitchToRussian()
     {
-        Log("Очищаем старое имя файла.");
+        IntPtr hkl =
+            LoadKeyboardLayout(
+                "00000419",
+                KLF_ACTIVATE);
 
-        // В начало поля имени.
-        SendKeys.SendWait("{HOME}");
+        if (hkl != IntPtr.Zero)
+        {
+            ActivateKeyboardLayout(
+                hkl,
+                0);
+        }
+
+        Thread.Sleep(300);
+    }
+
+    // =========================================================
+    // ПЕРЕКЛЮЧЕНИЕ НА АНГЛИЙСКУЮ РАСКЛАДКУ
+    // =========================================================
+
+    private void SwitchToEnglish()
+    {
+        IntPtr hkl =
+            LoadKeyboardLayout(
+                "00000409",
+                KLF_ACTIVATE);
+
+        if (hkl != IntPtr.Zero)
+        {
+            ActivateKeyboardLayout(
+                hkl,
+                0);
+        }
+
+        Thread.Sleep(300);
+    }
+
+    // =========================================================
+    // УДАЛЕНИЕ СТАРОГО И ВВОД НОВОГО ИМЕНИ
+    // =========================================================
+
+    private void ReplaceFileName(
+        string fileName)
+    {
+        Log(
+            "Очищаем старое имя файла.");
+
+        // -----------------------------------------------------
+        // СТАРОЕ ИМЯ УДАЛЯЕМ РАБОЧИМ СПОСОБОМ
+        // -----------------------------------------------------
+
+        SendKeys.SendWait(
+            "{HOME}");
 
         Thread.Sleep(300);
 
-        // Выделить всё старое имя.
-        SendKeys.SendWait("+{END}");
+        SendKeys.SendWait(
+            "+{END}");
 
         Thread.Sleep(300);
 
-        // Удалить старое имя.
-        SendKeys.SendWait("{BACKSPACE}");
+        SendKeys.SendWait(
+            "{BACKSPACE}");
 
         Thread.Sleep(500);
 
-        Log("Старое имя удалено.");
+        Log(
+            "Старое имя удалено.");
 
-        // Если это файл Damate qlik,
-        // разбиваем имя на русскую
-        // и английскую части.
-        if (fileName.Contains("Damate qlik"))
+        // -----------------------------------------------------
+        // ОБЫЧНЫЕ ФАЙЛЫ
+        // -----------------------------------------------------
+
+        if (!fileName.Contains(
+            "Damate qlik"))
         {
-            string englishPart =
-                "Damate qlik";
+            SwitchToRussian();
 
-            int englishIndex =
-                fileName.IndexOf(
-                    englishPart,
-                    StringComparison.Ordinal);
-
-            string russianPart =
-                fileName.Substring(
-                    0,
-                    englishIndex);
-
-            // Русская часть.
-            SendKeys.SendWait(
-                russianPart);
-
-            Thread.Sleep(300);
-
-            // Переключаемся на английскую
-            // раскладку.
-            SwitchKeyboardLayout();
-
-            Thread.Sleep(300);
-
-            // Английская часть.
-            SendKeys.SendWait(
-                englishPart);
-
-            Thread.Sleep(300);
-
-            // Возвращаем русскую раскладку.
-            SwitchKeyboardLayout();
-
-            Thread.Sleep(500);
-        }
-        else
-        {
-            // Для Производства и Бункера
-            // оставляем обычный рабочий
-            // способ ввода.
             SendKeys.SendWait(
                 fileName);
+
+            Thread.Sleep(1000);
+
+            Log(
+                $"Новое имя введено: {fileName}");
+
+            return;
         }
+
+        // -----------------------------------------------------
+        // DAMATE QLIK
+        // -----------------------------------------------------
+
+        string englishPart =
+            "Damate qlik";
+
+        int englishIndex =
+            fileName.IndexOf(
+                englishPart,
+                StringComparison.Ordinal);
+
+        string russianPart =
+            fileName.Substring(
+                0,
+                englishIndex);
+
+        // -----------------------------------------------------
+        // РУССКАЯ ЧАСТЬ
+        // -----------------------------------------------------
+
+        SwitchToRussian();
+
+        SendKeys.SendWait(
+            russianPart);
+
+        Thread.Sleep(500);
+
+        Log(
+            "Русская часть имени введена.");
+
+        // -----------------------------------------------------
+        // АНГЛИЙСКАЯ ЧАСТЬ
+        // -----------------------------------------------------
+
+        SwitchToEnglish();
+
+        Thread.Sleep(500);
+
+        SendKeys.SendWait(
+            englishPart);
+
+        Thread.Sleep(500);
+
+        Log(
+            "Английская часть имени введена.");
+
+        // -----------------------------------------------------
+        // ВОЗВРАЩАЕМ РУССКУЮ РАСКЛАДКУ
+        // -----------------------------------------------------
+
+        SwitchToRussian();
 
         Thread.Sleep(1000);
 
@@ -443,16 +604,9 @@ public sealed class MainForm : Form
             $"Новое имя введено: {fileName}");
     }
 
-    // Переключение раскладки:
-    // Alt + Shift
-    private void SwitchKeyboardLayout()
-    {
-        SendKeys.SendWait("%+");
-    }
-
-    // -------------------------------------------------
+    // =========================================================
     // ЭКСПОРТ ОДНОГО ОТЧЁТА
-    // -------------------------------------------------
+    // =========================================================
 
     private void ExportSingleReport(
         string reportPoint,
@@ -465,47 +619,70 @@ public sealed class MainForm : Form
         Log(
             $"Имя файла: {fileName}");
 
-        // Выбираем нужную вкладку.
+        // -----------------------------------------------------
+        // ВЫБИРАЕМ ВКЛАДКУ
+        // -----------------------------------------------------
+
         ClickPoint(
             reportPoint);
 
         Thread.Sleep(1000);
 
-        // Файл.
+        // -----------------------------------------------------
+        // ФАЙЛ
+        // -----------------------------------------------------
+
         ClickPoint(
             "Файл");
 
         Thread.Sleep(500);
 
-        // Экспорт.
+        // -----------------------------------------------------
+        // ЭКСПОРТ
+        // -----------------------------------------------------
+
         ClickPoint(
             "Экспорт");
 
-        // Ждём открытия окна сохранения.
+        // Ждём окно сохранения.
         Thread.Sleep(2000);
 
-        // Поле имени файла.
+        // -----------------------------------------------------
+        // ПОЛЕ ИМЕНИ
+        // -----------------------------------------------------
+
         ClickPoint(
             "Поле имени файла");
 
         Thread.Sleep(500);
 
-        // Удаление старого имени
-        // и ввод нового.
+        // -----------------------------------------------------
+        // УДАЛЯЕМ СТАРОЕ ИМЯ
+        // И ВВОДИМ НОВОЕ
+        // -----------------------------------------------------
+
         ReplaceFileName(
             fileName);
 
         Thread.Sleep(500);
 
-        // Сохранить.
+        // -----------------------------------------------------
+        // СОХРАНИТЬ
+        // -----------------------------------------------------
+
         ClickPoint(
             "Сохранить");
 
-        // Ждём окно
-        // "посмотреть файл?"
+        // -----------------------------------------------------
+        // ЖДЁМ ОКНО "ПОСМОТРЕТЬ ФАЙЛ"
+        // -----------------------------------------------------
+
         Thread.Sleep(2000);
 
-        // Нажимаем НЕТ.
+        // -----------------------------------------------------
+        // НАЖИМАЕМ "НЕТ"
+        // -----------------------------------------------------
+
         ClickPoint(
             "Нет");
 
@@ -515,9 +692,9 @@ public sealed class MainForm : Form
             $"Готово: {fileName}");
     }
 
-    // -------------------------------------------------
+    // =========================================================
     // ВСЕ ТРИ ОТЧЁТА
-    // -------------------------------------------------
+    // =========================================================
 
     private void ExportAllReports()
     {
@@ -566,10 +743,10 @@ public sealed class MainForm : Form
             Log(
                 $"Папка: {folder}");
 
-            // =========================================
+            // =================================================
             // 1. ОТЧЁТ ПРОИЗВОДСТВО
-            // ДАТА — ПРЕДЫДУЩИЙ ДЕНЬ
-            // =========================================
+            // ВЧЕРАШНЯЯ ДАТА
+            // =================================================
 
             string productionFile =
                 $"{yesterday:yyyy_MM_dd} " +
@@ -582,10 +759,10 @@ public sealed class MainForm : Form
 
             Thread.Sleep(2000);
 
-            // =========================================
+            // =================================================
             // 2. DAMATE QLIK
-            // ДАТА — ПРЕДЫДУЩИЙ ДЕНЬ
-            // =========================================
+            // ВЧЕРАШНЯЯ ДАТА
+            // =================================================
 
             string damateFile =
                 $"{yesterday:yyyy_MM_dd} " +
@@ -598,10 +775,10 @@ public sealed class MainForm : Form
 
             Thread.Sleep(2000);
 
-            // =========================================
+            // =================================================
             // 3. ОТЧЁТ БУНКЕР
-            // ДАТА — СЕГОДНЯ
-            // =========================================
+            // СЕГОДНЯШНЯЯ ДАТА
+            // =================================================
 
             string bunkerFile =
                 $"{today:yyyy_MM_dd} " +
@@ -611,6 +788,10 @@ public sealed class MainForm : Form
             ExportSingleReport(
                 "Отчет Бункер",
                 bunkerFile);
+
+            // =================================================
+            // ЗАВЕРШЕНИЕ
+            // =================================================
 
             Log("");
             Log(
@@ -649,6 +830,10 @@ public sealed class MainForm : Form
             setupButton.Enabled = true;
         }
     }
+
+    // =========================================================
+    // ЖУРНАЛ
+    // =========================================================
 
     private void Log(string text)
     {
