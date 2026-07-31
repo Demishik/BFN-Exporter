@@ -34,6 +34,13 @@ public sealed class MainForm : Form
         uint dwData,
         UIntPtr dwExtraInfo);
 
+    [DllImport("user32.dll")]
+    private static extern void keybd_event(
+        byte bVk,
+        byte bScan,
+        uint dwFlags,
+        UIntPtr dwExtraInfo);
+
     [StructLayout(LayoutKind.Sequential)]
     private struct POINT
     {
@@ -44,8 +51,13 @@ public sealed class MainForm : Form
     private const uint MOUSEEVENTF_LEFTDOWN = 0x0002;
     private const uint MOUSEEVENTF_LEFTUP = 0x0004;
 
+    private const byte VK_LWIN = 0x5B;
+    private const byte VK_SPACE = 0x20;
+
+    private const uint KEYEVENTF_KEYUP = 0x0002;
+
     // =========================================================
-    // НАЗВАНИЯ ТОЧЕК
+    // КООРДИНАТЫ
     // =========================================================
 
     private readonly string[] pointNames =
@@ -111,28 +123,47 @@ public sealed class MainForm : Form
 
         KeyPreview = true;
 
+        // -----------------------------------------------------
+        // Инструкция
+        // -----------------------------------------------------
+
         instruction.Dock = DockStyle.Top;
         instruction.Height = 75;
+
         instruction.Font =
             new Font("Segoe UI", 12);
 
         instruction.TextAlign =
             ContentAlignment.MiddleCenter;
 
+        // -----------------------------------------------------
+        // Координаты мыши
+        // -----------------------------------------------------
+
         mousePosition.Dock =
             DockStyle.Top;
+
         mousePosition.Height = 40;
+
         mousePosition.Font =
             new Font("Segoe UI", 11);
 
         mousePosition.TextAlign =
             ContentAlignment.MiddleCenter;
 
+        // -----------------------------------------------------
+        // Журнал
+        // -----------------------------------------------------
+
         log.Multiline = true;
         log.ReadOnly = true;
         log.Dock = DockStyle.Fill;
         log.ScrollBars =
             ScrollBars.Vertical;
+
+        // -----------------------------------------------------
+        // Кнопка экспорта
+        // -----------------------------------------------------
 
         exportButton.Text =
             "▶ Запустить экспорт 3 отчётов";
@@ -145,6 +176,10 @@ public sealed class MainForm : Form
         exportButton.Click +=
             (_, _) => ExportAllReports();
 
+        // -----------------------------------------------------
+        // Кнопка настройки
+        // -----------------------------------------------------
+
         setupButton.Text =
             "⚙ Настроить координаты";
 
@@ -156,6 +191,10 @@ public sealed class MainForm : Form
         setupButton.Click +=
             (_, _) => StartSetup();
 
+        // -----------------------------------------------------
+        // Элементы окна
+        // -----------------------------------------------------
+
         Controls.Add(log);
         Controls.Add(exportButton);
         Controls.Add(setupButton);
@@ -163,6 +202,10 @@ public sealed class MainForm : Form
         Controls.Add(instruction);
 
         KeyDown += MainForm_KeyDown;
+
+        // -----------------------------------------------------
+        // Таймер положения мыши
+        // -----------------------------------------------------
 
         System.Windows.Forms.Timer timer =
             new System.Windows.Forms.Timer();
@@ -180,6 +223,10 @@ public sealed class MainForm : Form
 
         timer.Start();
 
+        // -----------------------------------------------------
+        // Загружаем координаты
+        // -----------------------------------------------------
+
         LoadCoordinates();
 
         if (points.Count == pointNames.Length)
@@ -193,7 +240,8 @@ public sealed class MainForm : Form
                 "Нажми «Настроить координаты».";
         }
 
-        Log("BFN Exporter ПК №1 запущен.");
+        Log(
+            "BFN Exporter ПК №1 запущен.");
     }
 
     // =========================================================
@@ -208,6 +256,7 @@ public sealed class MainForm : Form
             setupIndex >= 0)
         {
             e.SuppressKeyPress = true;
+
             CapturePoint();
         }
 
@@ -222,7 +271,8 @@ public sealed class MainForm : Form
             instruction.Text =
                 "Настройка отменена.";
 
-            Log("Настройка отменена.");
+            Log(
+                "Настройка отменена.");
         }
     }
 
@@ -242,9 +292,14 @@ public sealed class MainForm : Form
         instruction.Text =
             $"Наведи мышь на «{pointNames[0]}» и нажми F8.";
 
-        Log("Настройка координат начата.");
-        Log("F8 — сохранить текущую позицию мыши.");
-        Log("ESC — отменить.");
+        Log(
+            "Настройка координат начата.");
+
+        Log(
+            "F8 — сохранить текущую позицию мыши.");
+
+        Log(
+            "ESC — отменить.");
     }
 
     private void CapturePoint()
@@ -283,7 +338,8 @@ public sealed class MainForm : Form
             instruction.Text =
                 "Готово! 8 координат сохранены.";
 
-            Log("Все 8 координат сохранены.");
+            Log(
+                "Все 8 координат сохранены.");
 
             return;
         }
@@ -320,17 +376,23 @@ public sealed class MainForm : Form
         try
         {
             if (!File.Exists(SettingsFile))
+            {
                 return;
+            }
 
             string json =
-                File.ReadAllText(SettingsFile);
+                File.ReadAllText(
+                    SettingsFile);
 
             Dictionary<string, Point>? loaded =
                 JsonSerializer.Deserialize<
-                    Dictionary<string, Point>>(json);
+                    Dictionary<string, Point>>(
+                        json);
 
             if (loaded == null)
+            {
                 return;
+            }
 
             foreach (var item in loaded)
             {
@@ -338,7 +400,8 @@ public sealed class MainForm : Form
                     item.Value;
             }
 
-            Log("Координаты загружены.");
+            Log(
+                "Координаты загружены.");
         }
         catch (Exception ex)
         {
@@ -389,50 +452,91 @@ public sealed class MainForm : Form
     }
 
     // =========================================================
-    // WIN + SPACE
+    // ПЕРЕКЛЮЧЕНИЕ РАСКЛАДКИ
+    // Win + Space
     // =========================================================
 
     private void SwitchKeyboardLayout()
     {
-        Log("Переключаем раскладку: Win + Space.");
+        Log(
+            "Переключаем раскладку: Win + Space.");
 
-        SendKeys.SendWait(
-            "{LWIN down}{SPACE}{LWIN up}");
+        // Нажимаем Win
+        keybd_event(
+            VK_LWIN,
+            0,
+            0,
+            UIntPtr.Zero);
 
-        Thread.Sleep(700);
+        Thread.Sleep(100);
+
+        // Нажимаем Space
+        keybd_event(
+            VK_SPACE,
+            0,
+            0,
+            UIntPtr.Zero);
+
+        Thread.Sleep(100);
+
+        // Отпускаем Space
+        keybd_event(
+            VK_SPACE,
+            0,
+            KEYEVENTF_KEYUP,
+            UIntPtr.Zero);
+
+        Thread.Sleep(100);
+
+        // Отпускаем Win
+        keybd_event(
+            VK_LWIN,
+            0,
+            KEYEVENTF_KEYUP,
+            UIntPtr.Zero);
+
+        Thread.Sleep(800);
     }
 
     // =========================================================
-    // УДАЛЕНИЕ СТАРОГО И ВВОД НОВОГО ИМЕНИ
+    // УДАЛЕНИЕ СТАРОГО ИМЕНИ + ВВОД НОВОГО
     // =========================================================
 
-    private void ReplaceFileName(string fileName)
+    private void ReplaceFileName(
+        string fileName)
     {
-        Log("Очищаем старое имя файла.");
+        Log(
+            "Очищаем старое имя файла.");
 
         // -----------------------------------------------------
-        // СТАРЫЙ РАБОЧИЙ СПОСОБ УДАЛЕНИЯ
+        // УДАЛЕНИЕ СТАРОГО ИМЕНИ
+        // ЭТОТ СПОСОБ ОСТАВЛЯЕМ
         // -----------------------------------------------------
 
-        SendKeys.SendWait("{HOME}");
+        SendKeys.SendWait(
+            "{HOME}");
 
         Thread.Sleep(300);
 
-        SendKeys.SendWait("+{END}");
+        SendKeys.SendWait(
+            "+{END}");
 
         Thread.Sleep(300);
 
-        SendKeys.SendWait("{BACKSPACE}");
+        SendKeys.SendWait(
+            "{BACKSPACE}");
 
         Thread.Sleep(500);
 
-        Log("Старое имя удалено.");
+        Log(
+            "Старое имя удалено.");
 
         // -----------------------------------------------------
         // DAMATE QLIK
         // -----------------------------------------------------
 
-        if (fileName.Contains("Damate qlik"))
+        if (fileName.Contains(
+            "Damate qlik"))
         {
             string englishPart =
                 "Damate qlik";
@@ -447,7 +551,10 @@ public sealed class MainForm : Form
                     0,
                     englishIndex);
 
-            // Русская часть.
+            // -------------------------------------------------
+            // РУССКАЯ ЧАСТЬ
+            // -------------------------------------------------
+
             SendKeys.SendWait(
                 russianPart);
 
@@ -456,10 +563,16 @@ public sealed class MainForm : Form
             Log(
                 "Русская часть имени введена.");
 
+            // -------------------------------------------------
             // RU -> EN
+            // -------------------------------------------------
+
             SwitchKeyboardLayout();
 
-            // Английская часть.
+            // -------------------------------------------------
+            // АНГЛИЙСКАЯ ЧАСТЬ
+            // -------------------------------------------------
+
             SendKeys.SendWait(
                 englishPart);
 
@@ -468,7 +581,10 @@ public sealed class MainForm : Form
             Log(
                 "Damate qlik введено.");
 
+            // -------------------------------------------------
             // EN -> RU
+            // -------------------------------------------------
+
             SwitchKeyboardLayout();
 
             Thread.Sleep(700);
@@ -479,9 +595,9 @@ public sealed class MainForm : Form
             return;
         }
 
-        // -----------------------------------------------------
+        // =====================================================
         // ПРОИЗВОДСТВО И БУНКЕР
-        // -----------------------------------------------------
+        // =====================================================
 
         SendKeys.SendWait(
             fileName);
@@ -501,46 +617,75 @@ public sealed class MainForm : Form
         string fileName)
     {
         Log("");
+
         Log(
             $"--- Начинаем: {reportPoint} ---");
 
         Log(
             $"Имя файла: {fileName}");
 
-        // Вкладка.
-        ClickPoint(reportPoint);
+        // -----------------------------------------------------
+        // ВКЛАДКА
+        // -----------------------------------------------------
+
+        ClickPoint(
+            reportPoint);
 
         Thread.Sleep(1000);
 
-        // Файл.
-        ClickPoint("Файл");
+        // -----------------------------------------------------
+        // ФАЙЛ
+        // -----------------------------------------------------
+
+        ClickPoint(
+            "Файл");
 
         Thread.Sleep(500);
 
-        // Экспорт.
-        ClickPoint("Экспорт");
+        // -----------------------------------------------------
+        // ЭКСПОРТ
+        // -----------------------------------------------------
+
+        ClickPoint(
+            "Экспорт");
 
         Thread.Sleep(2000);
 
-        // Поле имени.
-        ClickPoint("Поле имени файла");
+        // -----------------------------------------------------
+        // ПОЛЕ ИМЕНИ ФАЙЛА
+        // -----------------------------------------------------
+
+        ClickPoint(
+            "Поле имени файла");
 
         Thread.Sleep(500);
 
-        // Удаление старого имени
-        // + ввод нового.
-        ReplaceFileName(fileName);
+        // -----------------------------------------------------
+        // УДАЛЯЕМ СТАРОЕ ИМЯ
+        // И ПИШЕМ НОВОЕ
+        // -----------------------------------------------------
+
+        ReplaceFileName(
+            fileName);
 
         Thread.Sleep(500);
 
-        // Сохранить.
-        ClickPoint("Сохранить");
+        // -----------------------------------------------------
+        // СОХРАНИТЬ
+        // -----------------------------------------------------
 
-        // Ждём окно после сохранения.
+        ClickPoint(
+            "Сохранить");
+
         Thread.Sleep(2000);
 
-        // Всегда нажимаем "Нет".
-        ClickPoint("Нет");
+        // -----------------------------------------------------
+        // ОКНО "ПОСМОТРЕТЬ ФАЙЛ"
+        // НАЖИМАЕМ НЕТ
+        // -----------------------------------------------------
+
+        ClickPoint(
+            "Нет");
 
         Thread.Sleep(1500);
 
@@ -549,12 +694,13 @@ public sealed class MainForm : Form
     }
 
     // =========================================================
-    // ВСЕ ТРИ ОТЧЁТА
+    // ЭКСПОРТ ВСЕХ ТРЁХ ФАЙЛОВ
     // =========================================================
 
     private void ExportAllReports()
     {
-        if (points.Count != pointNames.Length)
+        if (points.Count !=
+            pointNames.Length)
         {
             MessageBox.Show(
                 "Нужно настроить все 8 координат.",
@@ -571,6 +717,7 @@ public sealed class MainForm : Form
         try
         {
             Log("");
+
             Log(
                 "================================");
 
@@ -637,6 +784,7 @@ public sealed class MainForm : Form
             // =================================================
 
             Log("");
+
             Log(
                 "================================");
 
@@ -655,6 +803,7 @@ public sealed class MainForm : Form
         catch (Exception ex)
         {
             Log("");
+
             Log(
                 "ОШИБКА ПРИ ВЫГРУЗКЕ:");
 
