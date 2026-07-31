@@ -40,7 +40,6 @@ public sealed class MainForm : Form
         public int Y;
     }
 
-    // Координаты, которые уже были записаны
     private readonly string[] pointNames =
     {
         "Отчет Производство",
@@ -83,7 +82,6 @@ public sealed class MainForm : Form
     public MainForm()
     {
         Text = "BFN Exporter — ПК №1";
-
         Width = 760;
         Height = 520;
 
@@ -102,9 +100,7 @@ public sealed class MainForm : Form
 
         mousePosition.Dock =
             DockStyle.Top;
-
         mousePosition.Height = 40;
-
         mousePosition.Font =
             new Font("Segoe UI", 11);
 
@@ -165,8 +161,7 @@ public sealed class MainForm : Form
 
         LoadCoordinates();
 
-        if (points.Count ==
-            pointNames.Length)
+        if (points.Count == pointNames.Length)
         {
             instruction.Text =
                 "Координаты загружены. Можно запускать экспорт.";
@@ -188,7 +183,6 @@ public sealed class MainForm : Form
             setupIndex >= 0)
         {
             e.SuppressKeyPress = true;
-
             CapturePoint();
         }
 
@@ -314,8 +308,7 @@ public sealed class MainForm : Form
                     item.Value;
             }
 
-            Log(
-                "Координаты загружены.");
+            Log("Координаты загружены.");
         }
         catch (Exception ex)
         {
@@ -361,46 +354,105 @@ public sealed class MainForm : Form
         Thread.Sleep(1000);
     }
 
-    // Рабочий способ:
-    // старое имя удаляем,
-    // новое вводим обычным SendKeys.
-    private void ReplaceFileName(
-        string fileName)
+    // -------------------------------------------------
+    // ВВОД НОВОГО ИМЕНИ
+    // -------------------------------------------------
+    //
+    // Старое имя удаляем проверенным способом:
+    //
+    // HOME -> SHIFT+END -> BACKSPACE
+    //
+    // Новое имя вводим по частям.
+    // Это позволяет корректно обработать
+    // английское "Damate qlik".
+    //
+    private void ReplaceFileName(string fileName)
     {
-        Log(
-            "Очищаем старое имя файла.");
+        Log("Очищаем старое имя файла.");
 
-        // В начало поля.
-        SendKeys.SendWait(
-            "{HOME}");
+        // В начало поля имени.
+        SendKeys.SendWait("{HOME}");
 
         Thread.Sleep(300);
 
-        // Выделить всё имя.
-        SendKeys.SendWait(
-            "+{END}");
+        // Выделить всё старое имя.
+        SendKeys.SendWait("+{END}");
 
         Thread.Sleep(300);
 
         // Удалить старое имя.
-        SendKeys.SendWait(
-            "{BACKSPACE}");
+        SendKeys.SendWait("{BACKSPACE}");
 
         Thread.Sleep(500);
 
-        Log(
-            "Старое имя удалено.");
+        Log("Старое имя удалено.");
 
-        // Рабочий способ ввода
-        // из первой версии.
-        SendKeys.SendWait(
-            fileName);
+        // Если это файл Damate qlik,
+        // разбиваем имя на русскую
+        // и английскую части.
+        if (fileName.Contains("Damate qlik"))
+        {
+            string englishPart =
+                "Damate qlik";
+
+            int englishIndex =
+                fileName.IndexOf(
+                    englishPart,
+                    StringComparison.Ordinal);
+
+            string russianPart =
+                fileName.Substring(
+                    0,
+                    englishIndex);
+
+            // Русская часть.
+            SendKeys.SendWait(
+                russianPart);
+
+            Thread.Sleep(300);
+
+            // Переключаемся на английскую
+            // раскладку.
+            SwitchKeyboardLayout();
+
+            Thread.Sleep(300);
+
+            // Английская часть.
+            SendKeys.SendWait(
+                englishPart);
+
+            Thread.Sleep(300);
+
+            // Возвращаем русскую раскладку.
+            SwitchKeyboardLayout();
+
+            Thread.Sleep(500);
+        }
+        else
+        {
+            // Для Производства и Бункера
+            // оставляем обычный рабочий
+            // способ ввода.
+            SendKeys.SendWait(
+                fileName);
+        }
 
         Thread.Sleep(1000);
 
         Log(
             $"Новое имя введено: {fileName}");
     }
+
+    // Переключение раскладки:
+    // Alt + Shift
+    private void SwitchKeyboardLayout()
+    {
+        SendKeys.SendWait("%+");
+    }
+
+    // -------------------------------------------------
+    // ЭКСПОРТ ОДНОГО ОТЧЁТА
+    // -------------------------------------------------
 
     private void ExportSingleReport(
         string reportPoint,
@@ -413,7 +465,7 @@ public sealed class MainForm : Form
         Log(
             $"Имя файла: {fileName}");
 
-        // Выбираем вкладку отчёта.
+        // Выбираем нужную вкладку.
         ClickPoint(
             reportPoint);
 
@@ -429,8 +481,7 @@ public sealed class MainForm : Form
         ClickPoint(
             "Экспорт");
 
-        // Ждём открытия окна
-        // сохранения.
+        // Ждём открытия окна сохранения.
         Thread.Sleep(2000);
 
         // Поле имени файла.
@@ -439,8 +490,8 @@ public sealed class MainForm : Form
 
         Thread.Sleep(500);
 
-        // Удаляем старое имя
-        // и вводим новое.
+        // Удаление старого имени
+        // и ввод нового.
         ReplaceFileName(
             fileName);
 
@@ -450,9 +501,8 @@ public sealed class MainForm : Form
         ClickPoint(
             "Сохранить");
 
-        // После сохранения BFNM
-        // показывает вопрос
-        // о просмотре файла.
+        // Ждём окно
+        // "посмотреть файл?"
         Thread.Sleep(2000);
 
         // Нажимаем НЕТ.
@@ -464,6 +514,10 @@ public sealed class MainForm : Form
         Log(
             $"Готово: {fileName}");
     }
+
+    // -------------------------------------------------
+    // ВСЕ ТРИ ОТЧЁТА
+    // -------------------------------------------------
 
     private void ExportAllReports()
     {
@@ -513,8 +567,8 @@ public sealed class MainForm : Form
                 $"Папка: {folder}");
 
             // =========================================
-            // 1. ОТЧЕТ ПРОИЗВОДСТВО
-            // ДАТА — ВЧЕРА
+            // 1. ОТЧЁТ ПРОИЗВОДСТВО
+            // ДАТА — ПРЕДЫДУЩИЙ ДЕНЬ
             // =========================================
 
             string productionFile =
@@ -526,13 +580,11 @@ public sealed class MainForm : Form
                 "Отчет Производство",
                 productionFile);
 
-            // Дополнительная пауза
-            // перед следующим отчётом.
             Thread.Sleep(2000);
 
             // =========================================
             // 2. DAMATE QLIK
-            // ДАТА — ВЧЕРА
+            // ДАТА — ПРЕДЫДУЩИЙ ДЕНЬ
             // =========================================
 
             string damateFile =
@@ -547,7 +599,7 @@ public sealed class MainForm : Form
             Thread.Sleep(2000);
 
             // =========================================
-            // 3. ОТЧЕТ БУНКЕР
+            // 3. ОТЧЁТ БУНКЕР
             // ДАТА — СЕГОДНЯ
             // =========================================
 
