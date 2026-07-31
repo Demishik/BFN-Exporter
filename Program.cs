@@ -395,4 +395,10 @@ public sealed class MainForm : Form
         setupButton.Enabled = true;
     }
 }
+private void Log(string text)
+{
+    log.AppendText(
+        $"{DateTime.Now:HH:mm:ss}  {text}" +
+        Environment.NewLine);
+}
 }
