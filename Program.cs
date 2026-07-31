@@ -48,7 +48,8 @@ public sealed class MainForm : Form
         "Файл",
         "Экспорт",
         "Поле имени файла",
-        "Сохранить"
+        "Сохранить",
+        "Нет"
     };
 
     private readonly Dictionary<string, Point> points = new();
