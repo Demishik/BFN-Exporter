@@ -105,7 +105,7 @@ public sealed class MainForm : Form
 
         KeyDown += MainForm_KeyDown;
 
-        Timer timer = new Timer();
+        System.Windows.Forms.Timer timer = new System.Windows.Forms.Timer();
         timer.Interval = 100;
 
         timer.Tick += (_, _) =>
