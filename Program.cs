@@ -40,6 +40,7 @@ public sealed class MainForm : Form
         public int Y;
     }
 
+    // Координаты, которые уже были записаны
     private readonly string[] pointNames =
     {
         "Отчет Производство",
@@ -82,35 +83,61 @@ public sealed class MainForm : Form
     public MainForm()
     {
         Text = "BFN Exporter — ПК №1";
+
         Width = 760;
         Height = 520;
-        StartPosition = FormStartPosition.CenterScreen;
+
+        StartPosition =
+            FormStartPosition.CenterScreen;
+
         KeyPreview = true;
 
         instruction.Dock = DockStyle.Top;
         instruction.Height = 75;
-        instruction.Font = new Font("Segoe UI", 12);
-        instruction.TextAlign = ContentAlignment.MiddleCenter;
+        instruction.Font =
+            new Font("Segoe UI", 12);
 
-        mousePosition.Dock = DockStyle.Top;
+        instruction.TextAlign =
+            ContentAlignment.MiddleCenter;
+
+        mousePosition.Dock =
+            DockStyle.Top;
+
         mousePosition.Height = 40;
-        mousePosition.Font = new Font("Segoe UI", 11);
-        mousePosition.TextAlign = ContentAlignment.MiddleCenter;
+
+        mousePosition.Font =
+            new Font("Segoe UI", 11);
+
+        mousePosition.TextAlign =
+            ContentAlignment.MiddleCenter;
 
         log.Multiline = true;
         log.ReadOnly = true;
         log.Dock = DockStyle.Fill;
-        log.ScrollBars = ScrollBars.Vertical;
+        log.ScrollBars =
+            ScrollBars.Vertical;
 
-        exportButton.Text = "▶ Запустить экспорт";
-        exportButton.Dock = DockStyle.Bottom;
+        exportButton.Text =
+            "▶ Запустить экспорт 3 отчётов";
+
+        exportButton.Dock =
+            DockStyle.Bottom;
+
         exportButton.Height = 50;
-        exportButton.Click += (_, _) => ProductionExport();
 
-        setupButton.Text = "⚙ Настроить координаты";
-        setupButton.Dock = DockStyle.Bottom;
+        exportButton.Click +=
+            (_, _) => ExportAllReports();
+
+        setupButton.Text =
+            "⚙ Настроить координаты";
+
+        setupButton.Dock =
+            DockStyle.Bottom;
+
         setupButton.Height = 50;
-        setupButton.Click += (_, _) => StartSetup();
+
+        setupButton.Click +=
+            (_, _) => StartSetup();
 
         Controls.Add(log);
         Controls.Add(exportButton);
@@ -138,7 +165,8 @@ public sealed class MainForm : Form
 
         LoadCoordinates();
 
-        if (points.Count == pointNames.Length)
+        if (points.Count ==
+            pointNames.Length)
         {
             instruction.Text =
                 "Координаты загружены. Можно запускать экспорт.";
@@ -149,27 +177,31 @@ public sealed class MainForm : Form
                 "Нажми «Настроить координаты».";
         }
 
-        Log("BFN Exporter запущен.");
+        Log("BFN Exporter ПК №1 запущен.");
     }
 
     private void MainForm_KeyDown(
         object? sender,
         KeyEventArgs e)
     {
-        if (e.KeyCode == Keys.F8 && setupIndex >= 0)
+        if (e.KeyCode == Keys.F8 &&
+            setupIndex >= 0)
         {
             e.SuppressKeyPress = true;
+
             CapturePoint();
         }
 
-        if (e.KeyCode == Keys.Escape && setupIndex >= 0)
+        if (e.KeyCode == Keys.Escape &&
+            setupIndex >= 0)
         {
             setupIndex = -1;
 
             setupButton.Enabled = true;
             exportButton.Enabled = true;
 
-            instruction.Text = "Настройка отменена.";
+            instruction.Text =
+                "Настройка отменена.";
 
             Log("Настройка отменена.");
         }
@@ -205,11 +237,14 @@ public sealed class MainForm : Form
             return;
         }
 
-        string name = pointNames[setupIndex];
+        string name =
+            pointNames[setupIndex];
 
-        points[name] = new Point(p.X, p.Y);
+        points[name] =
+            new Point(p.X, p.Y);
 
-        Log($"{name}: X={p.X}, Y={p.Y}");
+        Log(
+            $"{name}: X={p.X}, Y={p.Y}");
 
         setupIndex++;
 
@@ -225,7 +260,8 @@ public sealed class MainForm : Form
             instruction.Text =
                 "Готово! 8 координат сохранены.";
 
-            Log("Все 8 координат сохранены.");
+            Log(
+                "Все 8 координат сохранены.");
 
             return;
         }
@@ -259,11 +295,13 @@ public sealed class MainForm : Form
             }
 
             string json =
-                File.ReadAllText(SettingsFile);
+                File.ReadAllText(
+                    SettingsFile);
 
             Dictionary<string, Point>? loaded =
                 JsonSerializer.Deserialize<
-                    Dictionary<string, Point>>(json);
+                    Dictionary<string, Point>>(
+                        json);
 
             if (loaded == null)
             {
@@ -272,10 +310,12 @@ public sealed class MainForm : Form
 
             foreach (var item in loaded)
             {
-                points[item.Key] = item.Value;
+                points[item.Key] =
+                    item.Value;
             }
 
-            Log("Координаты загружены.");
+            Log(
+                "Координаты загружены.");
         }
         catch (Exception ex)
         {
@@ -300,7 +340,7 @@ public sealed class MainForm : Form
 
         Cursor.Position = p;
 
-        Thread.Sleep(400);
+        Thread.Sleep(500);
 
         mouse_event(
             MOUSEEVENTF_LEFTDOWN,
@@ -318,43 +358,117 @@ public sealed class MainForm : Form
             0,
             UIntPtr.Zero);
 
-        Thread.Sleep(800);
+        Thread.Sleep(1000);
     }
 
-    private void ReplaceFileName(string fileName)
+    // Рабочий способ:
+    // старое имя удаляем,
+    // новое вводим обычным SendKeys.
+    private void ReplaceFileName(
+        string fileName)
     {
-        Log("Очищаем старое имя файла.");
+        Log(
+            "Очищаем старое имя файла.");
 
-        // Переходим в начало поля имени.
-        SendKeys.SendWait("{HOME}");
-
-        Thread.Sleep(300);
-
-        // Выделяем всё старое имя.
-        SendKeys.SendWait("+{END}");
+        // В начало поля.
+        SendKeys.SendWait(
+            "{HOME}");
 
         Thread.Sleep(300);
 
-        // Удаляем старое имя.
-        SendKeys.SendWait("{BACKSPACE}");
+        // Выделить всё имя.
+        SendKeys.SendWait(
+            "+{END}");
+
+        Thread.Sleep(300);
+
+        // Удалить старое имя.
+        SendKeys.SendWait(
+            "{BACKSPACE}");
 
         Thread.Sleep(500);
 
-        Log("Старое имя удалено.");
+        Log(
+            "Старое имя удалено.");
 
-        // ВАЖНО:
-        // Новый текст вводится обычным SendKeys,
-        // как в первой рабочей версии.
-        SendKeys.SendWait(fileName);
+        // Рабочий способ ввода
+        // из первой версии.
+        SendKeys.SendWait(
+            fileName);
 
         Thread.Sleep(1000);
 
-        Log("Новое имя введено.");
+        Log(
+            $"Новое имя введено: {fileName}");
     }
 
-    private void ProductionExport()
+    private void ExportSingleReport(
+        string reportPoint,
+        string fileName)
     {
-        if (points.Count != pointNames.Length)
+        Log("");
+        Log(
+            $"--- Начинаем: {reportPoint} ---");
+
+        Log(
+            $"Имя файла: {fileName}");
+
+        // Выбираем вкладку отчёта.
+        ClickPoint(
+            reportPoint);
+
+        Thread.Sleep(1000);
+
+        // Файл.
+        ClickPoint(
+            "Файл");
+
+        Thread.Sleep(500);
+
+        // Экспорт.
+        ClickPoint(
+            "Экспорт");
+
+        // Ждём открытия окна
+        // сохранения.
+        Thread.Sleep(2000);
+
+        // Поле имени файла.
+        ClickPoint(
+            "Поле имени файла");
+
+        Thread.Sleep(500);
+
+        // Удаляем старое имя
+        // и вводим новое.
+        ReplaceFileName(
+            fileName);
+
+        Thread.Sleep(500);
+
+        // Сохранить.
+        ClickPoint(
+            "Сохранить");
+
+        // После сохранения BFNM
+        // показывает вопрос
+        // о просмотре файла.
+        Thread.Sleep(2000);
+
+        // Нажимаем НЕТ.
+        ClickPoint(
+            "Нет");
+
+        Thread.Sleep(1500);
+
+        Log(
+            $"Готово: {fileName}");
+    }
+
+    private void ExportAllReports()
+    {
+        if (points.Count !=
+            pointNames.Length)
         {
             MessageBox.Show(
                 "Нужно настроить все 8 координат.",
@@ -371,71 +485,104 @@ public sealed class MainForm : Form
         try
         {
             Log("");
-            Log("=== НАЧАЛО ЭКСПОРТА ПРОИЗВОДСТВА ===");
+            Log(
+                "================================");
 
-            DateTime today = DateTime.Today;
-            DateTime yesterday = today.AddDays(-1);
+            Log(
+                "НАЧАЛО ВЫГРУЗКИ 3 ОТЧЁТОВ");
+
+            Log(
+                "ПК №1 — Катковка Р-3");
+
+            Log(
+                "================================");
+
+            DateTime today =
+                DateTime.Today;
+
+            DateTime yesterday =
+                today.AddDays(-1);
 
             string folder =
                 Path.Combine(
                     @"C:\Отчеты",
-                    today.ToString("yyyy_MM"));
+                    today.ToString(
+                        "yyyy_MM"));
 
-            string fileName =
+            Log(
+                $"Папка: {folder}");
+
+            // =========================================
+            // 1. ОТЧЕТ ПРОИЗВОДСТВО
+            // ДАТА — ВЧЕРА
+            // =========================================
+
+            string productionFile =
                 $"{yesterday:yyyy_MM_dd} " +
                 "Катковка Р-3 " +
                 "Производственный отчет.xlsx";
 
-            Log($"Папка: {folder}");
-            Log($"Имя файла: {fileName}");
+            ExportSingleReport(
+                "Отчет Производство",
+                productionFile);
 
-            // 1. Отчет Производство
-            ClickPoint("Отчет Производство");
-
-            // 2. Файл
-            ClickPoint("Файл");
-
-            // 3. Экспорт
-            ClickPoint("Экспорт");
-
-            // Ждём открытия окна сохранения.
+            // Дополнительная пауза
+            // перед следующим отчётом.
             Thread.Sleep(2000);
 
-            // 4. Поле имени файла
-            ClickPoint("Поле имени файла");
+            // =========================================
+            // 2. DAMATE QLIK
+            // ДАТА — ВЧЕРА
+            // =========================================
 
-            Thread.Sleep(500);
+            string damateFile =
+                $"{yesterday:yyyy_MM_dd} " +
+                "Катковка Р-3 " +
+                "Damate qlik.xlsx";
 
-            // Удаляем старое имя
-            // и вводим новое.
-            ReplaceFileName(fileName);
+            ExportSingleReport(
+                "Damate Qlik",
+                damateFile);
 
-            // 5. Сохранить
-            ClickPoint("Сохранить");
+            Thread.Sleep(2000);
 
-            // Ждём появления окна
-            // с вопросом посмотреть файл.
-            Thread.Sleep(1800);
+            // =========================================
+            // 3. ОТЧЕТ БУНКЕР
+            // ДАТА — СЕГОДНЯ
+            // =========================================
 
-            // 6. Нет
-            ClickPoint("Нет");
+            string bunkerFile =
+                $"{today:yyyy_MM_dd} " +
+                "Катковка Р-3 " +
+                "Остаток корма на 00-00.xlsx";
 
-            Thread.Sleep(1000);
+            ExportSingleReport(
+                "Отчет Бункер",
+                bunkerFile);
 
-            Log("Производственный отчёт сохранён.");
-            Log("Окно просмотра закрыто кнопкой «Нет».");
-            Log("=== ЭКСПОРТ ЗАВЕРШЁН ===");
+            Log("");
+            Log(
+                "================================");
+
+            Log(
+                "ВСЕ 3 ОТЧЁТА УСПЕШНО ВЫГРУЖЕНЫ");
+
+            Log(
+                "================================");
 
             MessageBox.Show(
-                "Производственный отчёт сохранён.",
+                "Все 3 отчёта выгружены.",
                 "BFN Exporter",
                 MessageBoxButtons.OK,
                 MessageBoxIcon.Information);
         }
         catch (Exception ex)
         {
+            Log("");
             Log(
-                "ОШИБКА: " +
+                "ОШИБКА ПРИ ВЫГРУЗКЕ:");
+
+            Log(
                 ex.Message);
 
             MessageBox.Show(
