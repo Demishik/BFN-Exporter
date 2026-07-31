@@ -395,3 +395,4 @@ public sealed class MainForm : Form
         setupButton.Enabled = true;
     }
 }
+}
