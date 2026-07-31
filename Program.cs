@@ -2,7 +2,6 @@ using System;
 using System.Drawing;
 using System.IO;
 using System.Runtime.InteropServices;
-using System.Text;
 using System.Text.Json;
 using System.Collections.Generic;
 using System.Threading;
@@ -31,51 +30,14 @@ public sealed class MainForm : Form
         uint dwData,
         UIntPtr dwExtraInfo);
 
-    [DllImport("user32.dll")]
-    private static extern uint SendInput(
-        uint nInputs,
-        INPUT[] pInputs,
-        int cbSize);
-
     private const uint MOUSEEVENTF_LEFTDOWN = 0x0002;
     private const uint MOUSEEVENTF_LEFTUP = 0x0004;
-
-    private const uint INPUT_KEYBOARD = 1;
-
-    private const uint KEYEVENTF_UNICODE = 0x0004;
-    private const uint KEYEVENTF_KEYUP = 0x0002;
-
-    private const ushort VK_SHIFT = 0x10;
 
     [StructLayout(LayoutKind.Sequential)]
     private struct POINT
     {
         public int X;
         public int Y;
-    }
-
-    [StructLayout(LayoutKind.Sequential)]
-    private struct INPUT
-    {
-        public uint type;
-        public InputUnion U;
-    }
-
-    [StructLayout(LayoutKind.Explicit)]
-    private struct InputUnion
-    {
-        [FieldOffset(0)]
-        public KEYBDINPUT ki;
-    }
-
-    [StructLayout(LayoutKind.Sequential)]
-    private struct KEYBDINPUT
-    {
-        public ushort wVk;
-        public ushort wScan;
-        public uint dwFlags;
-        public uint time;
-        public UIntPtr dwExtraInfo;
     }
 
     private readonly string[] pointNames =
@@ -122,48 +84,33 @@ public sealed class MainForm : Form
         Text = "BFN Exporter — ПК №1";
         Width = 760;
         Height = 520;
-
-        StartPosition =
-            FormStartPosition.CenterScreen;
-
+        StartPosition = FormStartPosition.CenterScreen;
         KeyPreview = true;
 
         instruction.Dock = DockStyle.Top;
         instruction.Height = 75;
-        instruction.Font =
-            new Font("Segoe UI", 12);
-        instruction.TextAlign =
-            ContentAlignment.MiddleCenter;
+        instruction.Font = new Font("Segoe UI", 12);
+        instruction.TextAlign = ContentAlignment.MiddleCenter;
 
-        mousePosition.Dock =
-            DockStyle.Top;
+        mousePosition.Dock = DockStyle.Top;
         mousePosition.Height = 40;
-        mousePosition.Font =
-            new Font("Segoe UI", 11);
-        mousePosition.TextAlign =
-            ContentAlignment.MiddleCenter;
+        mousePosition.Font = new Font("Segoe UI", 11);
+        mousePosition.TextAlign = ContentAlignment.MiddleCenter;
 
         log.Multiline = true;
         log.ReadOnly = true;
         log.Dock = DockStyle.Fill;
-        log.ScrollBars =
-            ScrollBars.Vertical;
+        log.ScrollBars = ScrollBars.Vertical;
 
-        exportButton.Text =
-            "▶ Запустить экспорт";
-        exportButton.Dock =
-            DockStyle.Bottom;
+        exportButton.Text = "▶ Запустить экспорт";
+        exportButton.Dock = DockStyle.Bottom;
         exportButton.Height = 50;
-        exportButton.Click +=
-            (_, _) => ProductionExport();
+        exportButton.Click += (_, _) => ProductionExport();
 
-        setupButton.Text =
-            "⚙ Настроить координаты";
-        setupButton.Dock =
-            DockStyle.Bottom;
+        setupButton.Text = "⚙ Настроить координаты";
+        setupButton.Dock = DockStyle.Bottom;
         setupButton.Height = 50;
-        setupButton.Click +=
-            (_, _) => StartSetup();
+        setupButton.Click += (_, _) => StartSetup();
 
         Controls.Add(log);
         Controls.Add(exportButton);
@@ -191,8 +138,7 @@ public sealed class MainForm : Form
 
         LoadCoordinates();
 
-        if (points.Count ==
-            pointNames.Length)
+        if (points.Count == pointNames.Length)
         {
             instruction.Text =
                 "Координаты загружены. Можно запускать экспорт.";
@@ -210,23 +156,20 @@ public sealed class MainForm : Form
         object? sender,
         KeyEventArgs e)
     {
-        if (e.KeyCode == Keys.F8 &&
-            setupIndex >= 0)
+        if (e.KeyCode == Keys.F8 && setupIndex >= 0)
         {
             e.SuppressKeyPress = true;
             CapturePoint();
         }
 
-        if (e.KeyCode == Keys.Escape &&
-            setupIndex >= 0)
+        if (e.KeyCode == Keys.Escape && setupIndex >= 0)
         {
             setupIndex = -1;
 
             setupButton.Enabled = true;
             exportButton.Enabled = true;
 
-            instruction.Text =
-                "Настройка отменена.";
+            instruction.Text = "Настройка отменена.";
 
             Log("Настройка отменена.");
         }
@@ -253,24 +196,24 @@ public sealed class MainForm : Form
     {
         if (setupIndex < 0 ||
             setupIndex >= pointNames.Length)
+        {
             return;
+        }
 
         if (!GetCursorPos(out POINT p))
+        {
             return;
+        }
 
-        string name =
-            pointNames[setupIndex];
+        string name = pointNames[setupIndex];
 
-        points[name] =
-            new Point(p.X, p.Y);
+        points[name] = new Point(p.X, p.Y);
 
-        Log(
-            $"{name}: X={p.X}, Y={p.Y}");
+        Log($"{name}: X={p.X}, Y={p.Y}");
 
         setupIndex++;
 
-        if (setupIndex >=
-            pointNames.Length)
+        if (setupIndex >= pointNames.Length)
         {
             SaveCoordinates();
 
@@ -282,8 +225,7 @@ public sealed class MainForm : Form
             instruction.Text =
                 "Готово! 8 координат сохранены.";
 
-            Log(
-                "Все 8 координат сохранены.");
+            Log("Все 8 координат сохранены.");
 
             return;
         }
@@ -312,23 +254,25 @@ public sealed class MainForm : Form
         try
         {
             if (!File.Exists(SettingsFile))
+            {
                 return;
+            }
 
             string json =
                 File.ReadAllText(SettingsFile);
 
             Dictionary<string, Point>? loaded =
                 JsonSerializer.Deserialize<
-                    Dictionary<string, Point>>(
-                        json);
+                    Dictionary<string, Point>>(json);
 
             if (loaded == null)
+            {
                 return;
+            }
 
             foreach (var item in loaded)
             {
-                points[item.Key] =
-                    item.Value;
+                points[item.Key] = item.Value;
             }
 
             Log("Координаты загружены.");
@@ -377,70 +321,16 @@ public sealed class MainForm : Form
         Thread.Sleep(800);
     }
 
-    private void SendUnicodeText(string text)
-    {
-        foreach (char c in text)
-        {
-            ushort code = c;
-
-            INPUT down = new INPUT
-            {
-                type = INPUT_KEYBOARD,
-                U = new InputUnion
-                {
-                    ki = new KEYBDINPUT
-                    {
-                        wVk = 0,
-                        wScan = code,
-                        dwFlags = KEYEVENTF_UNICODE,
-                        time = 0,
-                        dwExtraInfo = UIntPtr.Zero
-                    }
-                }
-            };
-
-            INPUT up = new INPUT
-            {
-                type = INPUT_KEYBOARD,
-                U = new InputUnion
-                {
-                    ki = new KEYBDINPUT
-                    {
-                        wVk = 0,
-                        wScan = code,
-                        dwFlags =
-                            KEYEVENTF_UNICODE |
-                            KEYEVENTF_KEYUP,
-                        time = 0,
-                        dwExtraInfo = UIntPtr.Zero
-                    }
-                }
-            };
-
-            SendInput(
-                1,
-                new[] { down },
-                Marshal.SizeOf<INPUT>());
-
-            SendInput(
-                1,
-                new[] { up },
-                Marshal.SizeOf<INPUT>());
-
-            Thread.Sleep(10);
-        }
-    }
-
     private void ReplaceFileName(string fileName)
     {
         Log("Очищаем старое имя файла.");
 
-        // Переходим в начало поля.
+        // Переходим в начало поля имени.
         SendKeys.SendWait("{HOME}");
 
         Thread.Sleep(300);
 
-        // Выделяем всё содержимое.
+        // Выделяем всё старое имя.
         SendKeys.SendWait("+{END}");
 
         Thread.Sleep(300);
@@ -452,9 +342,10 @@ public sealed class MainForm : Form
 
         Log("Старое имя удалено.");
 
-        // Вводим новое имя напрямую
-        // через Windows Unicode input.
-        SendUnicodeText(fileName);
+        // ВАЖНО:
+        // Новый текст вводится обычным SendKeys,
+        // как в первой рабочей версии.
+        SendKeys.SendWait(fileName);
 
         Thread.Sleep(1000);
 
@@ -463,8 +354,7 @@ public sealed class MainForm : Form
 
     private void ProductionExport()
     {
-        if (points.Count !=
-            pointNames.Length)
+        if (points.Count != pointNames.Length)
         {
             MessageBox.Show(
                 "Нужно настроить все 8 координат.",
@@ -481,14 +371,10 @@ public sealed class MainForm : Form
         try
         {
             Log("");
-            Log(
-                "=== НАЧАЛО ЭКСПОРТА ПРОИЗВОДСТВА ===");
+            Log("=== НАЧАЛО ЭКСПОРТА ПРОИЗВОДСТВА ===");
 
-            DateTime today =
-                DateTime.Today;
-
-            DateTime yesterday =
-                today.AddDays(-1);
+            DateTime today = DateTime.Today;
+            DateTime yesterday = today.AddDays(-1);
 
             string folder =
                 Path.Combine(
@@ -500,55 +386,45 @@ public sealed class MainForm : Form
                 "Катковка Р-3 " +
                 "Производственный отчет.xlsx";
 
-            Log(
-                $"Папка: {folder}");
+            Log($"Папка: {folder}");
+            Log($"Имя файла: {fileName}");
 
-            Log(
-                $"Имя файла: {fileName}");
+            // 1. Отчет Производство
+            ClickPoint("Отчет Производство");
 
-            // Отчет Производство
-            ClickPoint(
-                "Отчет Производство");
-
-            // Файл
+            // 2. Файл
             ClickPoint("Файл");
 
-            // Экспорт
+            // 3. Экспорт
             ClickPoint("Экспорт");
 
-            // Ждём окно сохранения.
+            // Ждём открытия окна сохранения.
             Thread.Sleep(2000);
 
-            // Поле имени файла.
-            ClickPoint(
-                "Поле имени файла");
+            // 4. Поле имени файла
+            ClickPoint("Поле имени файла");
 
             Thread.Sleep(500);
 
-            // Заменяем старое имя.
-            ReplaceFileName(
-                fileName);
+            // Удаляем старое имя
+            // и вводим новое.
+            ReplaceFileName(fileName);
 
-            // Сохранить.
-            ClickPoint(
-                "Сохранить");
+            // 5. Сохранить
+            ClickPoint("Сохранить");
 
-            // Ждём окно после сохранения.
+            // Ждём появления окна
+            // с вопросом посмотреть файл.
             Thread.Sleep(1800);
 
-            // Нет.
+            // 6. Нет
             ClickPoint("Нет");
 
             Thread.Sleep(1000);
 
-            Log(
-                "Производственный отчёт сохранён.");
-
-            Log(
-                "Окно просмотра закрыто кнопкой «Нет».");
-
-            Log(
-                "=== ЭКСПОРТ ЗАВЕРШЁН ===");
+            Log("Производственный отчёт сохранён.");
+            Log("Окно просмотра закрыто кнопкой «Нет».");
+            Log("=== ЭКСПОРТ ЗАВЕРШЁН ===");
 
             MessageBox.Show(
                 "Производственный отчёт сохранён.",
