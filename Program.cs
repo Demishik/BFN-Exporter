@@ -19,14 +19,10 @@ Application.Run(new MainForm());
 
 public sealed class MainForm : Form
 {
-// =========================================================
-// WINDOWS API
-// =========================================================
-
-```
 [DllImport("user32.dll")]
 private static extern bool GetCursorPos(out POINT p);
 
+```
 [DllImport("user32.dll")]
 private static extern void mouse_event(
     uint dwFlags,
@@ -45,10 +41,6 @@ private struct POINT
 private const uint MOUSEEVENTF_LEFTDOWN = 0x0002;
 private const uint MOUSEEVENTF_LEFTUP = 0x0004;
 
-// =========================================================
-// КООРДИНАТЫ
-// =========================================================
-
 private readonly string[] pointNames =
 {
     "Отчет Производство",
@@ -63,10 +55,6 @@ private readonly string[] pointNames =
 
 private readonly Dictionary<string, Point> points = new();
 
-// =========================================================
-// ЭЛЕМЕНТЫ ОКНА
-// =========================================================
-
 private readonly Label instruction = new();
 private readonly Label mousePosition = new();
 private readonly TextBox log = new();
@@ -74,10 +62,6 @@ private readonly Button setupButton = new();
 private readonly Button exportButton = new();
 
 private int setupIndex = -1;
-
-// =========================================================
-// ФАЙЛ НАСТРОЕК
-// =========================================================
 
 private string SettingsFile
 {
@@ -96,93 +80,46 @@ private string SettingsFile
     }
 }
 
-// =========================================================
-// КОНСТРУКТОР
-// =========================================================
-
 public MainForm()
 {
     Text = "BFN Exporter — ПК №1";
-
     Width = 760;
     Height = 520;
-
-    StartPosition =
-        FormStartPosition.CenterScreen;
-
+    StartPosition = FormStartPosition.CenterScreen;
     KeyPreview = true;
-
-    // -----------------------------------------------------
-    // Инструкция
-    // -----------------------------------------------------
 
     instruction.Dock = DockStyle.Top;
     instruction.Height = 75;
+    instruction.Font = new Font("Segoe UI", 12);
+    instruction.TextAlign = ContentAlignment.MiddleCenter;
 
-    instruction.Font =
-        new Font("Segoe UI", 12);
-
-    instruction.TextAlign =
-        ContentAlignment.MiddleCenter;
-
-    // -----------------------------------------------------
-    // Координаты мыши
-    // -----------------------------------------------------
-
-    mousePosition.Dock =
-        DockStyle.Top;
-
+    mousePosition.Dock = DockStyle.Top;
     mousePosition.Height = 40;
-
-    mousePosition.Font =
-        new Font("Segoe UI", 11);
-
-    mousePosition.TextAlign =
-        ContentAlignment.MiddleCenter;
-
-    // -----------------------------------------------------
-    // Журнал
-    // -----------------------------------------------------
+    mousePosition.Font = new Font("Segoe UI", 11);
+    mousePosition.TextAlign = ContentAlignment.MiddleCenter;
 
     log.Multiline = true;
     log.ReadOnly = true;
     log.Dock = DockStyle.Fill;
-    log.ScrollBars =
-        ScrollBars.Vertical;
-
-    // -----------------------------------------------------
-    // Кнопка экспорта
-    // -----------------------------------------------------
+    log.ScrollBars = ScrollBars.Vertical;
 
     exportButton.Text =
         "▶ Запустить экспорт 3 отчётов";
 
-    exportButton.Dock =
-        DockStyle.Bottom;
-
+    exportButton.Dock = DockStyle.Bottom;
     exportButton.Height = 50;
 
     exportButton.Click +=
         (_, _) => ExportAllReports();
 
-    // -----------------------------------------------------
-    // Кнопка настройки
-    // -----------------------------------------------------
-
     setupButton.Text =
         "⚙ Настроить координаты";
 
-    setupButton.Dock =
-        DockStyle.Bottom;
-
+    setupButton.Dock = DockStyle.Bottom;
     setupButton.Height = 50;
 
     setupButton.Click +=
         (_, _) => StartSetup();
-
-    // -----------------------------------------------------
-    // Элементы окна
-    // -----------------------------------------------------
 
     Controls.Add(log);
     Controls.Add(exportButton);
@@ -191,10 +128,6 @@ public MainForm()
     Controls.Add(instruction);
 
     KeyDown += MainForm_KeyDown;
-
-    // -----------------------------------------------------
-    // Таймер положения мыши
-    // -----------------------------------------------------
 
     System.Windows.Forms.Timer timer =
         new System.Windows.Forms.Timer();
@@ -211,10 +144,6 @@ public MainForm()
     };
 
     timer.Start();
-
-    // -----------------------------------------------------
-    // Загружаем координаты
-    // -----------------------------------------------------
 
     LoadCoordinates();
 
@@ -233,10 +162,6 @@ public MainForm()
         "BFN Exporter ПК №1 запущен.");
 }
 
-// =========================================================
-// КЛАВИАТУРА
-// =========================================================
-
 private void MainForm_KeyDown(
     object? sender,
     KeyEventArgs e)
@@ -245,7 +170,6 @@ private void MainForm_KeyDown(
         setupIndex >= 0)
     {
         e.SuppressKeyPress = true;
-
         CapturePoint();
     }
 
@@ -264,10 +188,6 @@ private void MainForm_KeyDown(
             "Настройка отменена.");
     }
 }
-
-// =========================================================
-// НАСТРОЙКА КООРДИНАТ
-// =========================================================
 
 private void StartSetup()
 {
@@ -337,10 +257,6 @@ private void CapturePoint()
         $"Наведи мышь на «{pointNames[setupIndex]}» и нажми F8.";
 }
 
-// =========================================================
-// СОХРАНЕНИЕ КООРДИНАТ
-// =========================================================
-
 private void SaveCoordinates()
 {
     string json =
@@ -355,10 +271,6 @@ private void SaveCoordinates()
         SettingsFile,
         json);
 }
-
-// =========================================================
-// ЗАГРУЗКА КООРДИНАТ
-// =========================================================
 
 private void LoadCoordinates()
 {
@@ -400,10 +312,6 @@ private void LoadCoordinates()
     }
 }
 
-// =========================================================
-// КЛИК ПО КООРДИНАТЕ
-// =========================================================
-
 private void ClickPoint(string name)
 {
     if (!points.TryGetValue(
@@ -440,9 +348,21 @@ private void ClickPoint(string name)
     Thread.Sleep(1000);
 }
 
-// =========================================================
-// УДАЛЕНИЕ СТАРОГО ИМЕНИ + ВВОД НОВОГО
-// =========================================================
+private void ActivateFileNameField()
+{
+    Log(
+        "Повторно активируем поле имени файла.");
+
+    ClickPoint(
+        "Поле имени файла");
+
+    Thread.Sleep(700);
+
+    SendKeys.SendWait(
+        "{END}");
+
+    Thread.Sleep(300);
+}
 
 private void ReplaceFileName(
     string fileName)
@@ -468,18 +388,34 @@ private void ReplaceFileName(
     Log(
         "Старое имя удалено.");
 
-    SendKeys.SendWait(
-        fileName);
+    Log(
+        $"Вставляем новое имя файла: {fileName}");
 
-    Thread.Sleep(1000);
+    try
+    {
+        Clipboard.SetText(fileName);
+
+        Thread.Sleep(300);
+
+        SendKeys.SendWait(
+            "^v");
+
+        Thread.Sleep(1000);
+
+        Clipboard.Clear();
+    }
+    catch (Exception ex)
+    {
+        Log(
+            "Ошибка работы с буфером обмена: " +
+            ex.Message);
+
+        throw;
+    }
 
     Log(
         $"Новое имя введено: {fileName}");
 }
-
-// =========================================================
-// ЭКСПОРТ ОДНОГО ОТЧЁТА
-// =========================================================
 
 private void ExportSingleReport(
     string reportPoint,
@@ -493,65 +429,35 @@ private void ExportSingleReport(
     Log(
         $"Имя файла: {fileName}");
 
-    // -----------------------------------------------------
-    // ВКЛАДКА
-    // -----------------------------------------------------
-
     ClickPoint(
         reportPoint);
 
     Thread.Sleep(1000);
-
-    // -----------------------------------------------------
-    // ФАЙЛ
-    // -----------------------------------------------------
 
     ClickPoint(
         "Файл");
 
     Thread.Sleep(500);
 
-    // -----------------------------------------------------
-    // ЭКСПОРТ
-    // -----------------------------------------------------
-
     ClickPoint(
         "Экспорт");
 
     Thread.Sleep(2000);
-
-    // -----------------------------------------------------
-    // ПОЛЕ ИМЕНИ ФАЙЛА
-    // -----------------------------------------------------
 
     ClickPoint(
         "Поле имени файла");
 
     Thread.Sleep(500);
 
-    // -----------------------------------------------------
-    // УДАЛЯЕМ СТАРОЕ ИМЯ
-    // И ПИШЕМ НОВОЕ
-    // -----------------------------------------------------
-
     ReplaceFileName(
         fileName);
 
     Thread.Sleep(500);
 
-    // -----------------------------------------------------
-    // СОХРАНИТЬ
-    // -----------------------------------------------------
-
     ClickPoint(
         "Сохранить");
 
     Thread.Sleep(2000);
-
-    // -----------------------------------------------------
-    // ОКНО "ПОСМОТРЕТЬ ФАЙЛ"
-    // НАЖИМАЕМ НЕТ
-    // -----------------------------------------------------
 
     ClickPoint(
         "Нет");
@@ -561,10 +467,6 @@ private void ExportSingleReport(
     Log(
         $"Готово: {fileName}");
 }
-
-// =========================================================
-// ЭКСПОРТ ВСЕХ ТРЁХ ФАЙЛОВ
-// =========================================================
 
 private void ExportAllReports()
 {
@@ -586,7 +488,6 @@ private void ExportAllReports()
     try
     {
         Log("");
-
         Log(
             "================================");
 
@@ -605,10 +506,6 @@ private void ExportAllReports()
         DateTime yesterday =
             today.AddDays(-1);
 
-        // =================================================
-        // 1. ПРОИЗВОДСТВО
-        // =================================================
-
         string productionFile =
             $"{yesterday:yyyy_MM_dd} " +
             "Катковка Р-3 " +
@@ -619,10 +516,6 @@ private void ExportAllReports()
             productionFile);
 
         Thread.Sleep(2000);
-
-        // =================================================
-        // 2. ДАМАТЕ КЛИК
-        // =================================================
 
         string damateFile =
             $"{yesterday:yyyy_MM_dd} " +
@@ -635,10 +528,6 @@ private void ExportAllReports()
 
         Thread.Sleep(2000);
 
-        // =================================================
-        // 3. БУНКЕР
-        // =================================================
-
         string bunkerFile =
             $"{today:yyyy_MM_dd} " +
             "Катковка Р-3 " +
@@ -647,10 +536,6 @@ private void ExportAllReports()
         ExportSingleReport(
             "Отчет Бункер",
             bunkerFile);
-
-        // =================================================
-        // ГОТОВО
-        // =================================================
 
         Log("");
 
@@ -692,10 +577,6 @@ private void ExportAllReports()
     }
 }
 
-// =========================================================
-// ЖУРНАЛ
-// =========================================================
-
 private void Log(string text)
 {
     log.AppendText(
@@ -703,6 +584,5 @@ private void Log(string text)
         $"{text}" +
         Environment.NewLine);
 }
-```
 
 }
