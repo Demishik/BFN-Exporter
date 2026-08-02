@@ -9,580 +9,538 @@ using System.Windows.Forms;
 
 internal static class Program
 {
-[STAThread]
-static void Main()
-{
-ApplicationConfiguration.Initialize();
-Application.Run(new MainForm());
-}
+    [STAThread]
+    static void Main()
+    {
+        ApplicationConfiguration.Initialize();
+        Application.Run(new MainForm());
+    }
 }
 
 public sealed class MainForm : Form
 {
-[DllImport("user32.dll")]
-private static extern bool GetCursorPos(out POINT p);
+    [DllImport("user32.dll")]
+    private static extern bool GetCursorPos(out POINT p);
 
-```
-[DllImport("user32.dll")]
-private static extern void mouse_event(
-    uint dwFlags,
-    uint dx,
-    uint dy,
-    uint dwData,
-    UIntPtr dwExtraInfo);
+    [DllImport("user32.dll")]
+    private static extern void mouse_event(
+        uint dwFlags,
+        uint dx,
+        uint dy,
+        uint dwData,
+        UIntPtr dwExtraInfo);
 
-[StructLayout(LayoutKind.Sequential)]
-private struct POINT
-{
-    public int X;
-    public int Y;
-}
-
-private const uint MOUSEEVENTF_LEFTDOWN = 0x0002;
-private const uint MOUSEEVENTF_LEFTUP = 0x0004;
-
-private readonly string[] pointNames =
-{
-    "Отчет Производство",
-    "Damate Qlik",
-    "Отчет Бункер",
-    "Файл",
-    "Экспорт",
-    "Поле имени файла",
-    "Сохранить",
-    "Нет"
-};
-
-private readonly Dictionary<string, Point> points = new();
-
-private readonly Label instruction = new();
-private readonly Label mousePosition = new();
-private readonly TextBox log = new();
-private readonly Button setupButton = new();
-private readonly Button exportButton = new();
-
-private int setupIndex = -1;
-
-private string SettingsFile
-{
-    get
+    [StructLayout(LayoutKind.Sequential)]
+    private struct POINT
     {
-        string folder = Path.Combine(
-            Environment.GetFolderPath(
-                Environment.SpecialFolder.ApplicationData),
-            "BFN_Exporter");
-
-        Directory.CreateDirectory(folder);
-
-        return Path.Combine(
-            folder,
-            "coordinates.json");
+        public int X;
+        public int Y;
     }
-}
 
-public MainForm()
-{
-    Text = "BFN Exporter — ПК №1";
-    Width = 760;
-    Height = 520;
-    StartPosition = FormStartPosition.CenterScreen;
-    KeyPreview = true;
+    private const uint MOUSEEVENTF_LEFTDOWN = 0x0002;
+    private const uint MOUSEEVENTF_LEFTUP = 0x0004;
 
-    instruction.Dock = DockStyle.Top;
-    instruction.Height = 75;
-    instruction.Font = new Font("Segoe UI", 12);
-    instruction.TextAlign = ContentAlignment.MiddleCenter;
-
-    mousePosition.Dock = DockStyle.Top;
-    mousePosition.Height = 40;
-    mousePosition.Font = new Font("Segoe UI", 11);
-    mousePosition.TextAlign = ContentAlignment.MiddleCenter;
-
-    log.Multiline = true;
-    log.ReadOnly = true;
-    log.Dock = DockStyle.Fill;
-    log.ScrollBars = ScrollBars.Vertical;
-
-    exportButton.Text =
-        "▶ Запустить экспорт 3 отчётов";
-
-    exportButton.Dock = DockStyle.Bottom;
-    exportButton.Height = 50;
-
-    exportButton.Click +=
-        (_, _) => ExportAllReports();
-
-    setupButton.Text =
-        "⚙ Настроить координаты";
-
-    setupButton.Dock = DockStyle.Bottom;
-    setupButton.Height = 50;
-
-    setupButton.Click +=
-        (_, _) => StartSetup();
-
-    Controls.Add(log);
-    Controls.Add(exportButton);
-    Controls.Add(setupButton);
-    Controls.Add(mousePosition);
-    Controls.Add(instruction);
-
-    KeyDown += MainForm_KeyDown;
-
-    System.Windows.Forms.Timer timer =
-        new System.Windows.Forms.Timer();
-
-    timer.Interval = 100;
-
-    timer.Tick += (_, _) =>
+    private readonly string[] pointNames =
     {
-        if (GetCursorPos(out POINT p))
-        {
-            mousePosition.Text =
-                $"Положение мыши: X={p.X}   Y={p.Y}";
-        }
+        "Отчет Производство",
+        "Damate Qlik",
+        "Отчет Бункер",
+        "Файл",
+        "Экспорт",
+        "Поле имени файла",
+        "Сохранить",
+        "Нет"
     };
 
-    timer.Start();
+    private readonly Dictionary<string, Point> points = new();
 
-    LoadCoordinates();
+    private readonly Label instruction = new();
+    private readonly Label mousePosition = new();
+    private readonly TextBox log = new();
+    private readonly Button setupButton = new();
+    private readonly Button exportButton = new();
 
-    if (points.Count == pointNames.Length)
+    private int setupIndex = -1;
+
+    private string SettingsFile
     {
-        instruction.Text =
-            "Координаты загружены. Можно запускать экспорт.";
-    }
-    else
-    {
-        instruction.Text =
-            "Нажми «Настроить координаты».";
-    }
+        get
+        {
+            string folder = Path.Combine(
+                Environment.GetFolderPath(
+                    Environment.SpecialFolder.ApplicationData),
+                "BFN_Exporter");
 
-    Log(
-        "BFN Exporter ПК №1 запущен.");
-}
+            Directory.CreateDirectory(folder);
 
-private void MainForm_KeyDown(
-    object? sender,
-    KeyEventArgs e)
-{
-    if (e.KeyCode == Keys.F8 &&
-        setupIndex >= 0)
-    {
-        e.SuppressKeyPress = true;
-        CapturePoint();
+            return Path.Combine(
+                folder,
+                "coordinates.json");
+        }
     }
 
-    if (e.KeyCode == Keys.Escape &&
-        setupIndex >= 0)
+    public MainForm()
     {
-        setupIndex = -1;
+        Text = "BFN Exporter — ПК №1";
+        Width = 760;
+        Height = 520;
+        StartPosition = FormStartPosition.CenterScreen;
+        KeyPreview = true;
 
-        setupButton.Enabled = true;
-        exportButton.Enabled = true;
+        instruction.Dock = DockStyle.Top;
+        instruction.Height = 75;
+        instruction.Font = new Font("Segoe UI", 12);
+        instruction.TextAlign = ContentAlignment.MiddleCenter;
 
-        instruction.Text =
-            "Настройка отменена.";
+        mousePosition.Dock = DockStyle.Top;
+        mousePosition.Height = 40;
+        mousePosition.Font = new Font("Segoe UI", 11);
+        mousePosition.TextAlign = ContentAlignment.MiddleCenter;
 
-        Log(
-            "Настройка отменена.");
-    }
-}
+        log.Multiline = true;
+        log.ReadOnly = true;
+        log.Dock = DockStyle.Fill;
+        log.ScrollBars = ScrollBars.Vertical;
 
-private void StartSetup()
-{
-    points.Clear();
+        exportButton.Text = "▶ Запустить экспорт 3 отчётов";
+        exportButton.Dock = DockStyle.Bottom;
+        exportButton.Height = 50;
+        exportButton.Click += (_, _) => ExportAllReports();
 
-    setupIndex = 0;
+        setupButton.Text = "⚙ Настроить координаты";
+        setupButton.Dock = DockStyle.Bottom;
+        setupButton.Height = 50;
+        setupButton.Click += (_, _) => StartSetup();
 
-    setupButton.Enabled = false;
-    exportButton.Enabled = false;
+        Controls.Add(log);
+        Controls.Add(exportButton);
+        Controls.Add(setupButton);
+        Controls.Add(mousePosition);
+        Controls.Add(instruction);
 
-    instruction.Text =
-        $"Наведи мышь на «{pointNames[0]}» и нажми F8.";
+        KeyDown += MainForm_KeyDown;
 
-    Log(
-        "Настройка координат начата.");
+        System.Windows.Forms.Timer timer =
+            new System.Windows.Forms.Timer();
 
-    Log(
-        "F8 — сохранить текущую позицию мыши.");
+        timer.Interval = 100;
 
-    Log(
-        "ESC — отменить.");
-}
-
-private void CapturePoint()
-{
-    if (setupIndex < 0 ||
-        setupIndex >= pointNames.Length)
-    {
-        return;
-    }
-
-    if (!GetCursorPos(out POINT p))
-    {
-        return;
-    }
-
-    string name =
-        pointNames[setupIndex];
-
-    points[name] =
-        new Point(p.X, p.Y);
-
-    Log(
-        $"{name}: X={p.X}, Y={p.Y}");
-
-    setupIndex++;
-
-    if (setupIndex >= pointNames.Length)
-    {
-        SaveCoordinates();
-
-        setupIndex = -1;
-
-        setupButton.Enabled = true;
-        exportButton.Enabled = true;
-
-        instruction.Text =
-            "Готово! 8 координат сохранены.";
-
-        Log(
-            "Все 8 координат сохранены.");
-
-        return;
-    }
-
-    instruction.Text =
-        $"Наведи мышь на «{pointNames[setupIndex]}» и нажми F8.";
-}
-
-private void SaveCoordinates()
-{
-    string json =
-        JsonSerializer.Serialize(
-            points,
-            new JsonSerializerOptions
+        timer.Tick += (_, _) =>
+        {
+            if (GetCursorPos(out POINT p))
             {
-                WriteIndented = true
-            });
+                mousePosition.Text =
+                    $"Положение мыши: X={p.X}   Y={p.Y}";
+            }
+        };
 
-    File.WriteAllText(
-        SettingsFile,
-        json);
-}
+        timer.Start();
 
-private void LoadCoordinates()
-{
-    try
+        LoadCoordinates();
+
+        if (points.Count == pointNames.Length)
+        {
+            instruction.Text =
+                "Координаты загружены. Можно запускать экспорт.";
+        }
+        else
+        {
+            instruction.Text =
+                "Нажми «Настроить координаты».";
+        }
+
+        Log("BFN Exporter ПК №1 запущен.");
+    }
+
+    private void MainForm_KeyDown(
+        object? sender,
+        KeyEventArgs e)
     {
-        if (!File.Exists(SettingsFile))
+        if (e.KeyCode == Keys.F8 &&
+            setupIndex >= 0)
+        {
+            e.SuppressKeyPress = true;
+            CapturePoint();
+        }
+
+        if (e.KeyCode == Keys.Escape &&
+            setupIndex >= 0)
+        {
+            setupIndex = -1;
+
+            setupButton.Enabled = true;
+            exportButton.Enabled = true;
+
+            instruction.Text = "Настройка отменена.";
+
+            Log("Настройка отменена.");
+        }
+    }
+
+    private void StartSetup()
+    {
+        points.Clear();
+
+        setupIndex = 0;
+
+        setupButton.Enabled = false;
+        exportButton.Enabled = false;
+
+        instruction.Text =
+            $"Наведи мышь на «{pointNames[0]}» и нажми F8.";
+
+        Log("Настройка координат начата.");
+        Log("F8 — сохранить текущую позицию мыши.");
+        Log("ESC — отменить.");
+    }
+
+    private void CapturePoint()
+    {
+        if (setupIndex < 0 ||
+            setupIndex >= pointNames.Length)
         {
             return;
         }
 
+        if (!GetCursorPos(out POINT p))
+        {
+            return;
+        }
+
+        string name = pointNames[setupIndex];
+
+        points[name] = new Point(p.X, p.Y);
+
+        Log($"{name}: X={p.X}, Y={p.Y}");
+
+        setupIndex++;
+
+        if (setupIndex >= pointNames.Length)
+        {
+            SaveCoordinates();
+
+            setupIndex = -1;
+
+            setupButton.Enabled = true;
+            exportButton.Enabled = true;
+
+            instruction.Text =
+                "Готово! 8 координат сохранены.";
+
+            Log("Все 8 координат сохранены.");
+
+            return;
+        }
+
+        instruction.Text =
+            $"Наведи мышь на «{pointNames[setupIndex]}» и нажми F8.";
+    }
+
+    private void SaveCoordinates()
+    {
         string json =
-            File.ReadAllText(
-                SettingsFile);
+            JsonSerializer.Serialize(
+                points,
+                new JsonSerializerOptions
+                {
+                    WriteIndented = true
+                });
 
-        Dictionary<string, Point>? loaded =
-            JsonSerializer.Deserialize<
-                Dictionary<string, Point>>(
-                    json);
+        File.WriteAllText(
+            SettingsFile,
+            json);
+    }
 
-        if (loaded == null)
+    private void LoadCoordinates()
+    {
+        try
         {
-            return;
+            if (!File.Exists(SettingsFile))
+            {
+                return;
+            }
+
+            string json =
+                File.ReadAllText(SettingsFile);
+
+            Dictionary<string, Point>? loaded =
+                JsonSerializer.Deserialize<
+                    Dictionary<string, Point>>(json);
+
+            if (loaded == null)
+            {
+                return;
+            }
+
+            foreach (var item in loaded)
+            {
+                points[item.Key] = item.Value;
+            }
+
+            Log("Координаты загружены.");
         }
-
-        foreach (var item in loaded)
+        catch (Exception ex)
         {
-            points[item.Key] =
-                item.Value;
+            Log(
+                "Ошибка загрузки координат: " +
+                ex.Message);
+        }
+    }
+
+    private void ClickPoint(string name)
+    {
+        if (!points.TryGetValue(
+            name,
+            out Point p))
+        {
+            throw new Exception(
+                $"Нет координаты: {name}");
         }
 
         Log(
-            "Координаты загружены.");
+            $"Клик: {name} ({p.X},{p.Y})");
+
+        Cursor.Position = p;
+
+        Thread.Sleep(500);
+
+        mouse_event(
+            MOUSEEVENTF_LEFTDOWN,
+            0,
+            0,
+            0,
+            UIntPtr.Zero);
+
+        Thread.Sleep(100);
+
+        mouse_event(
+            MOUSEEVENTF_LEFTUP,
+            0,
+            0,
+            0,
+            UIntPtr.Zero);
+
+        Thread.Sleep(1000);
     }
-    catch (Exception ex)
+
+    private void ReplaceFileName(string fileName)
     {
-        Log(
-            "Ошибка загрузки координат: " +
-            ex.Message);
-    }
-}
+        Log("Очищаем старое имя файла.");
 
-private void ClickPoint(string name)
-{
-    if (!points.TryGetValue(
-        name,
-        out Point p))
-    {
-        throw new Exception(
-            $"Нет координаты: {name}");
-    }
-
-    Log(
-        $"Клик: {name} ({p.X},{p.Y})");
-
-    Cursor.Position = p;
-
-    Thread.Sleep(500);
-
-    mouse_event(
-        MOUSEEVENTF_LEFTDOWN,
-        0,
-        0,
-        0,
-        UIntPtr.Zero);
-
-    Thread.Sleep(100);
-
-    mouse_event(
-        MOUSEEVENTF_LEFTUP,
-        0,
-        0,
-        0,
-        UIntPtr.Zero);
-
-    Thread.Sleep(1000);
-}
-
-private void ActivateFileNameField()
-{
-    Log(
-        "Повторно активируем поле имени файла.");
-
-    ClickPoint(
-        "Поле имени файла");
-
-    Thread.Sleep(700);
-
-    SendKeys.SendWait(
-        "{END}");
-
-    Thread.Sleep(300);
-}
-
-private void ReplaceFileName(
-    string fileName)
-{
-    Log(
-        "Очищаем старое имя файла.");
-
-    SendKeys.SendWait(
-        "{HOME}");
-
-    Thread.Sleep(300);
-
-    SendKeys.SendWait(
-        "+{END}");
-
-    Thread.Sleep(300);
-
-    SendKeys.SendWait(
-        "{BACKSPACE}");
-
-    Thread.Sleep(500);
-
-    Log(
-        "Старое имя удалено.");
-
-    Log(
-        $"Вставляем новое имя файла: {fileName}");
-
-    try
-    {
-        Clipboard.SetText(fileName);
+        SendKeys.SendWait("{HOME}");
 
         Thread.Sleep(300);
 
-        SendKeys.SendWait(
-            "^v");
+        SendKeys.SendWait("+{END}");
+
+        Thread.Sleep(300);
+
+        SendKeys.SendWait("{BACKSPACE}");
+
+        Thread.Sleep(500);
+
+        Log("Старое имя удалено.");
+
+        Log(
+            $"Вставляем новое имя файла: {fileName}");
+
+        IDataObject? oldClipboard = null;
+
+        try
+        {
+            if (Clipboard.ContainsData(
+                DataFormats.UnicodeText))
+            {
+                oldClipboard = Clipboard.GetDataObject();
+            }
+
+            Clipboard.SetText(fileName);
+
+            Thread.Sleep(300);
+
+            SendKeys.SendWait("^v");
+
+            Thread.Sleep(1000);
+        }
+        catch (Exception ex)
+        {
+            Log(
+                "Ошибка работы с буфером обмена: " +
+                ex.Message);
+
+            throw;
+        }
+        finally
+        {
+            try
+            {
+                Clipboard.Clear();
+            }
+            catch
+            {
+            }
+        }
+
+        Log(
+            $"Новое имя введено: {fileName}");
+    }
+
+    private void ExportSingleReport(
+        string reportPoint,
+        string fileName)
+    {
+        Log("");
+
+        Log(
+            $"--- Начинаем: {reportPoint} ---");
+
+        Log(
+            $"Имя файла: {fileName}");
+
+        ClickPoint(reportPoint);
 
         Thread.Sleep(1000);
 
-        Clipboard.Clear();
-    }
-    catch (Exception ex)
-    {
-        Log(
-            "Ошибка работы с буфером обмена: " +
-            ex.Message);
+        ClickPoint("Файл");
 
-        throw;
-    }
+        Thread.Sleep(500);
 
-    Log(
-        $"Новое имя введено: {fileName}");
-}
-
-private void ExportSingleReport(
-    string reportPoint,
-    string fileName)
-{
-    Log("");
-
-    Log(
-        $"--- Начинаем: {reportPoint} ---");
-
-    Log(
-        $"Имя файла: {fileName}");
-
-    ClickPoint(
-        reportPoint);
-
-    Thread.Sleep(1000);
-
-    ClickPoint(
-        "Файл");
-
-    Thread.Sleep(500);
-
-    ClickPoint(
-        "Экспорт");
-
-    Thread.Sleep(2000);
-
-    ClickPoint(
-        "Поле имени файла");
-
-    Thread.Sleep(500);
-
-    ReplaceFileName(
-        fileName);
-
-    Thread.Sleep(500);
-
-    ClickPoint(
-        "Сохранить");
-
-    Thread.Sleep(2000);
-
-    ClickPoint(
-        "Нет");
-
-    Thread.Sleep(1500);
-
-    Log(
-        $"Готово: {fileName}");
-}
-
-private void ExportAllReports()
-{
-    if (points.Count !=
-        pointNames.Length)
-    {
-        MessageBox.Show(
-            "Нужно настроить все 8 координат.",
-            "BFN Exporter",
-            MessageBoxButtons.OK,
-            MessageBoxIcon.Warning);
-
-        return;
-    }
-
-    exportButton.Enabled = false;
-    setupButton.Enabled = false;
-
-    try
-    {
-        Log("");
-        Log(
-            "================================");
-
-        Log(
-            "НАЧАЛО ВЫГРУЗКИ 3 ОТЧЁТОВ");
-
-        Log(
-            "ПК №1 — Катковка Р-3");
-
-        Log(
-            "================================");
-
-        DateTime today =
-            DateTime.Today;
-
-        DateTime yesterday =
-            today.AddDays(-1);
-
-        string productionFile =
-            $"{yesterday:yyyy_MM_dd} " +
-            "Катковка Р-3 " +
-            "Производственный отчет.xlsx";
-
-        ExportSingleReport(
-            "Отчет Производство",
-            productionFile);
+        ClickPoint("Экспорт");
 
         Thread.Sleep(2000);
 
-        string damateFile =
-            $"{yesterday:yyyy_MM_dd} " +
-            "Катковка Р-3 " +
-            "Дамате клик.xlsx";
+        ClickPoint("Поле имени файла");
 
-        ExportSingleReport(
-            "Damate Qlik",
-            damateFile);
+        Thread.Sleep(500);
+
+        ReplaceFileName(fileName);
+
+        Thread.Sleep(500);
+
+        ClickPoint("Сохранить");
 
         Thread.Sleep(2000);
 
-        string bunkerFile =
-            $"{today:yyyy_MM_dd} " +
-            "Катковка Р-3 " +
-            "Остаток корма на 00-00.xlsx";
+        ClickPoint("Нет");
 
-        ExportSingleReport(
-            "Отчет Бункер",
-            bunkerFile);
-
-        Log("");
+        Thread.Sleep(1500);
 
         Log(
-            "================================");
-
-        Log(
-            "ВСЕ 3 ОТЧЁТА УСПЕШНО ВЫГРУЖЕНЫ");
-
-        Log(
-            "================================");
-
-        MessageBox.Show(
-            "Все 3 отчёта выгружены.",
-            "BFN Exporter",
-            MessageBoxButtons.OK,
-            MessageBoxIcon.Information);
+            $"Готово: {fileName}");
     }
-    catch (Exception ex)
+
+    private void ExportAllReports()
     {
-        Log("");
+        if (points.Count != pointNames.Length)
+        {
+            MessageBox.Show(
+                "Нужно настроить все 8 координат.",
+                "BFN Exporter",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Warning);
 
-        Log(
-            "ОШИБКА ПРИ ВЫГРУЗКЕ:");
+            return;
+        }
 
-        Log(
-            ex.Message);
+        exportButton.Enabled = false;
+        setupButton.Enabled = false;
 
-        MessageBox.Show(
-            ex.Message,
-            "Ошибка BFN Exporter",
-            MessageBoxButtons.OK,
-            MessageBoxIcon.Error);
+        try
+        {
+            Log("");
+
+            Log(
+                "================================");
+
+            Log(
+                "НАЧАЛО ВЫГРУЗКИ 3 ОТЧЁТОВ");
+
+            Log(
+                "ПК №1 — Катковка Р-3");
+
+            Log(
+                "================================");
+
+            DateTime today = DateTime.Today;
+
+            DateTime yesterday =
+                today.AddDays(-1);
+
+            string productionFile =
+                $"{yesterday:yyyy_MM_dd} " +
+                "Катковка Р-3 " +
+                "Производственный отчет.xlsx";
+
+            ExportSingleReport(
+                "Отчет Производство",
+                productionFile);
+
+            Thread.Sleep(2000);
+
+            string damateFile =
+                $"{yesterday:yyyy_MM_dd} " +
+                "Катковка Р-3 " +
+                "Дамате клик.xlsx";
+
+            ExportSingleReport(
+                "Damate Qlik",
+                damateFile);
+
+            Thread.Sleep(2000);
+
+            string bunkerFile =
+                $"{today:yyyy_MM_dd} " +
+                "Катковка Р-3 " +
+                "Остаток корма на 00-00.xlsx";
+
+            ExportSingleReport(
+                "Отчет Бункер",
+                bunkerFile);
+
+            Log("");
+
+            Log(
+                "================================");
+
+            Log(
+                "ВСЕ 3 ОТЧЁЁТА УСПЕШНО ВЫГРУЖЕНЫ");
+
+            Log(
+                "================================");
+
+            MessageBox.Show(
+                "Все 3 отчёта выгружены.",
+                "BFN Exporter",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Information);
+        }
+        catch (Exception ex)
+        {
+            Log("");
+
+            Log(
+                "ОШИБКА ПРИ ВЫГРУЗКЕ:");
+
+            Log(ex.Message);
+
+            MessageBox.Show(
+                ex.Message,
+                "Ошибка BFN Exporter",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Error);
+        }
+        finally
+        {
+            exportButton.Enabled = true;
+            setupButton.Enabled = true;
+        }
     }
-    finally
+
+    private void Log(string text)
     {
-        exportButton.Enabled = true;
-        setupButton.Enabled = true;
+        log.AppendText(
+            $"{DateTime.Now:HH:mm:ss}  " +
+            $"{text}" +
+            Environment.NewLine);
     }
-}
-
-private void Log(string text)
-{
-    log.AppendText(
-        $"{DateTime.Now:HH:mm:ss}  " +
-        $"{text}" +
-        Environment.NewLine);
-}
-
 }
