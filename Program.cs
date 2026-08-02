@@ -5,6 +5,7 @@ using System.IO;
 using System.Runtime.InteropServices;
 using System.Text.Json;
 using System.Threading;
+using System.Threading.Tasks;
 using System.Windows.Forms;
 
 internal static class Program
@@ -30,6 +31,18 @@ public sealed class MainForm : Form
         uint dwData,
         UIntPtr dwExtraInfo);
 
+    [DllImport("user32.dll")]
+    private static extern bool RegisterHotKey(
+        IntPtr hWnd,
+        int id,
+        uint fsModifiers,
+        uint vk);
+
+    [DllImport("user32.dll")]
+    private static extern bool UnregisterHotKey(
+        IntPtr hWnd,
+        int id);
+
     [StructLayout(LayoutKind.Sequential)]
     private struct POINT
     {
@@ -39,6 +52,18 @@ public sealed class MainForm : Form
 
     private const uint MOUSEEVENTF_LEFTDOWN = 0x0002;
     private const uint MOUSEEVENTF_LEFTUP = 0x0004;
+
+    private const int HOTKEY_ESC = 1001;
+    private const uint MOD_NOREPEAT = 0x4000;
+    private const uint VK_ESCAPE = 0x1B;
+
+    private readonly string[] screenNames =
+    {
+        "Н33/Н34",
+        "Р18",
+        "Р20",
+        "Катковка"
+    };
 
     private readonly string[] pointNames =
     {
@@ -52,15 +77,27 @@ public sealed class MainForm : Form
         "Нет"
     };
 
-    private readonly Dictionary<string, Point> points = new();
+    private readonly Dictionary<string, Dictionary<string, Point>> allPoints = new();
 
     private readonly Label instruction = new();
     private readonly Label mousePosition = new();
+    private readonly Label currentScreenLabel = new();
     private readonly TextBox log = new();
+
+    private readonly ComboBox screenSelector = new();
+
     private readonly Button setupButton = new();
     private readonly Button exportButton = new();
+    private readonly Button cancelButton = new();
 
     private int setupIndex = -1;
+
+    private CancellationTokenSource? exportCancellation;
+    private bool exportRunning;
+
+    private string CurrentSetupScreen =>
+        screenSelector.SelectedItem?.ToString()
+        ?? screenNames[0];
 
     private string SettingsFile
     {
@@ -81,21 +118,47 @@ public sealed class MainForm : Form
 
     public MainForm()
     {
-        Text = "BFN Exporter — ПК №1";
-        Width = 760;
-        Height = 520;
+        Text = "BFN Exporter — 4 экрана";
+        Width = 820;
+        Height = 650;
         StartPosition = FormStartPosition.CenterScreen;
         KeyPreview = true;
 
         instruction.Dock = DockStyle.Top;
-        instruction.Height = 75;
+        instruction.Height = 65;
         instruction.Font = new Font("Segoe UI", 12);
         instruction.TextAlign = ContentAlignment.MiddleCenter;
 
         mousePosition.Dock = DockStyle.Top;
-        mousePosition.Height = 40;
-        mousePosition.Font = new Font("Segoe UI", 11);
+        mousePosition.Height = 35;
+        mousePosition.Font = new Font("Segoe UI", 10);
         mousePosition.TextAlign = ContentAlignment.MiddleCenter;
+
+        currentScreenLabel.Dock = DockStyle.Top;
+        currentScreenLabel.Height = 35;
+        currentScreenLabel.Font = new Font("Segoe UI", 11, FontStyle.Bold);
+        currentScreenLabel.TextAlign = ContentAlignment.MiddleCenter;
+
+        screenSelector.Dock = DockStyle.Top;
+        screenSelector.Height = 35;
+        screenSelector.DropDownStyle = ComboBoxStyle.DropDownList;
+
+        foreach (string screen in screenNames)
+        {
+            screenSelector.Items.Add(screen);
+        }
+
+        screenSelector.SelectedIndex = 0;
+
+        screenSelector.SelectedIndexChanged += (_, _) =>
+        {
+            UpdateCurrentScreenLabel();
+
+            if (setupIndex < 0 && !exportRunning)
+            {
+                UpdateInstructionForCurrentScreen();
+            }
+        };
 
         log.Multiline = true;
         log.ReadOnly = true;
@@ -103,30 +166,55 @@ public sealed class MainForm : Form
         log.ScrollBars = ScrollBars.Vertical;
 
         exportButton.Text =
-            "▶ Запустить экспорт 3 отчётов";
+            "▶ ВЫГРУЗИТЬ ВСЕ 4 ЭКРАНА";
 
         exportButton.Dock = DockStyle.Bottom;
-        exportButton.Height = 50;
+        exportButton.Height = 55;
+        exportButton.Font = new Font(
+            "Segoe UI",
+            11,
+            FontStyle.Bold);
 
-        exportButton.Click +=
-            (_, _) => ExportAllReports();
+        exportButton.Click += async (_, _) =>
+        {
+            await ExportAllScreens();
+        };
+
+        cancelButton.Text =
+            "■ ОТМЕНА  (ESC)";
+
+        cancelButton.Dock = DockStyle.Bottom;
+        cancelButton.Height = 50;
+        cancelButton.Enabled = false;
+        cancelButton.Font = new Font(
+            "Segoe UI",
+            10,
+            FontStyle.Bold);
+
+        cancelButton.Click += (_, _) =>
+        {
+            CancelExport();
+        };
 
         setupButton.Text =
-            "⚙ Настроить координаты";
+            "⚙ Настроить координаты выбранного экрана";
 
         setupButton.Dock = DockStyle.Bottom;
         setupButton.Height = 50;
 
-        setupButton.Click +=
-            (_, _) => StartSetup();
+        setupButton.Click += (_, _) =>
+        {
+            StartSetup();
+        };
 
         Controls.Add(log);
         Controls.Add(exportButton);
+        Controls.Add(cancelButton);
         Controls.Add(setupButton);
+        Controls.Add(screenSelector);
         Controls.Add(mousePosition);
+        Controls.Add(currentScreenLabel);
         Controls.Add(instruction);
-
-        KeyDown += MainForm_KeyDown;
 
         System.Windows.Forms.Timer timer =
             new System.Windows.Forms.Timer();
@@ -146,19 +234,186 @@ public sealed class MainForm : Form
 
         LoadCoordinates();
 
-        if (points.Count == pointNames.Length)
+        UpdateCurrentScreenLabel();
+
+        Log(
+            "BFN Exporter запущен.");
+
+        Log(
+            "Настройка выполняется отдельно для каждого экрана.");
+
+        UpdateInstructionForCurrentScreen();
+
+        if (!RegisterHotKey(
+            Handle,
+            HOTKEY_ESC,
+            MOD_NOREPEAT,
+            VK_ESCAPE))
+        {
+            Log(
+                "ВНИМАНИЕ: не удалось зарегистрировать глобальную клавишу ESC.");
+        }
+        else
+        {
+            Log(
+                "ESC зарегистрирован как глобальная отмена.");
+        }
+    }
+
+    protected override void WndProc(ref Message m)
+    {
+        const int WM_HOTKEY = 0x0312;
+
+        if (m.Msg == WM_HOTKEY &&
+            m.WParam.ToInt32() == HOTKEY_ESC)
+        {
+            if (exportRunning)
+            {
+                CancelExport();
+            }
+            else if (setupIndex >= 0)
+            {
+                CancelSetup();
+            }
+        }
+
+        base.WndProc(ref m);
+    }
+
+    protected override void OnFormClosed(FormClosedEventArgs e)
+    {
+        try
+        {
+            UnregisterHotKey(
+                Handle,
+                HOTKEY_ESC);
+        }
+        catch
+        {
+        }
+
+        exportCancellation?.Cancel();
+        exportCancellation?.Dispose();
+
+        base.OnFormClosed(e);
+    }
+
+    private void UpdateCurrentScreenLabel()
+    {
+        currentScreenLabel.Text =
+            $"Выбранный экран: {CurrentSetupScreen}";
+    }
+
+    private void UpdateInstructionForCurrentScreen()
+    {
+        if (HasAllCoordinates(CurrentSetupScreen))
         {
             instruction.Text =
-                "Координаты загружены. Можно запускать экспорт.";
+                $"Координаты для «{CurrentSetupScreen}» загружены.";
         }
         else
         {
             instruction.Text =
-                "Нажми «Настроить координаты».";
+                $"Для «{CurrentSetupScreen}» координаты ещё не настроены.";
+        }
+    }
+
+    private Dictionary<string, Point> GetOrCreateScreenPoints(
+        string screen)
+    {
+        if (!allPoints.TryGetValue(
+            screen,
+            out Dictionary<string, Point>? points))
+        {
+            points = new Dictionary<string, Point>();
+
+            allPoints[screen] = points;
         }
 
+        return points;
+    }
+
+    private bool HasAllCoordinates(string screen)
+    {
+        if (!allPoints.TryGetValue(
+            screen,
+            out Dictionary<string, Point>? points))
+        {
+            return false;
+        }
+
+        foreach (string pointName in pointNames)
+        {
+            if (!points.ContainsKey(pointName))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private void StartSetup()
+    {
+        if (exportRunning)
+        {
+            return;
+        }
+
+        string screen = CurrentSetupScreen;
+
+        Dictionary<string, Point> points =
+            GetOrCreateScreenPoints(screen);
+
+        points.Clear();
+
+        setupIndex = 0;
+
+        setupButton.Enabled = false;
+        exportButton.Enabled = false;
+        cancelButton.Enabled = true;
+        screenSelector.Enabled = false;
+
+        instruction.Text =
+            $"«{screen}»: наведи мышь на «{pointNames[0]}» и нажми F8.";
+
+        Log("");
         Log(
-            "BFN Exporter ПК №1 запущен.");
+            $"--- Начата настройка координат: {screen} ---");
+
+        Log(
+            "F8 — сохранить текущую позицию мыши.");
+
+        Log(
+            "ESC — отменить настройку.");
+
+        Log(
+            $"Нужно сохранить {pointNames.Length} координат.");
+    }
+
+    private void CancelSetup()
+    {
+        if (setupIndex < 0)
+        {
+            return;
+        }
+
+        string screen = CurrentSetupScreen;
+
+        setupIndex = -1;
+
+        GetOrCreateScreenPoints(screen).Clear();
+
+        setupButton.Enabled = true;
+        exportButton.Enabled = true;
+        cancelButton.Enabled = false;
+        screenSelector.Enabled = true;
+
+        instruction.Text =
+            "Настройка отменена.";
+
+        Log(
+            $"Настройка координат «{screen}» отменена.");
     }
 
     private void MainForm_KeyDown(
@@ -172,42 +427,19 @@ public sealed class MainForm : Form
             CapturePoint();
         }
 
-        if (e.KeyCode == Keys.Escape &&
-            setupIndex >= 0)
+        if (e.KeyCode == Keys.Escape)
         {
-            setupIndex = -1;
+            e.SuppressKeyPress = true;
 
-            setupButton.Enabled = true;
-            exportButton.Enabled = true;
-
-            instruction.Text =
-                "Настройка отменена.";
-
-            Log(
-                "Настройка отменена.");
+            if (exportRunning)
+            {
+                CancelExport();
+            }
+            else if (setupIndex >= 0)
+            {
+                CancelSetup();
+            }
         }
-    }
-
-    private void StartSetup()
-    {
-        points.Clear();
-
-        setupIndex = 0;
-
-        setupButton.Enabled = false;
-        exportButton.Enabled = false;
-
-        instruction.Text =
-            $"Наведи мышь на «{pointNames[0]}» и нажми F8.";
-
-        Log(
-            "Настройка координат начата.");
-
-        Log(
-            "F8 — сохранить текущую позицию мыши.");
-
-        Log(
-            "ESC — отменить.");
     }
 
     private void CapturePoint()
@@ -223,6 +455,11 @@ public sealed class MainForm : Form
             return;
         }
 
+        string screen = CurrentSetupScreen;
+
+        Dictionary<string, Point> points =
+            GetOrCreateScreenPoints(screen);
+
         string name =
             pointNames[setupIndex];
 
@@ -230,7 +467,7 @@ public sealed class MainForm : Form
             new Point(p.X, p.Y);
 
         Log(
-            $"{name}: X={p.X}, Y={p.Y}");
+            $"{screen} — {name}: X={p.X}, Y={p.Y}");
 
         setupIndex++;
 
@@ -242,33 +479,44 @@ public sealed class MainForm : Form
 
             setupButton.Enabled = true;
             exportButton.Enabled = true;
+            cancelButton.Enabled = false;
+            screenSelector.Enabled = true;
 
             instruction.Text =
-                "Готово! 8 координат сохранены.";
+                $"Готово! 8 координат для «{screen}» сохранены.";
 
             Log(
-                "Все 8 координат сохранены.");
+                $"Все 8 координат для «{screen}» сохранены.");
 
             return;
         }
 
         instruction.Text =
-            $"Наведи мышь на «{pointNames[setupIndex]}» и нажми F8.";
+            $"«{screen}»: наведи мышь на «{pointNames[setupIndex]}» и нажми F8.";
     }
 
     private void SaveCoordinates()
     {
-        string json =
-            JsonSerializer.Serialize(
-                points,
-                new JsonSerializerOptions
-                {
-                    WriteIndented = true
-                });
+        try
+        {
+            string json =
+                JsonSerializer.Serialize(
+                    allPoints,
+                    new JsonSerializerOptions
+                    {
+                        WriteIndented = true
+                    });
 
-        File.WriteAllText(
-            SettingsFile,
-            json);
+            File.WriteAllText(
+                SettingsFile,
+                json);
+        }
+        catch (Exception ex)
+        {
+            Log(
+                "Ошибка сохранения координат: " +
+                ex.Message);
+        }
     }
 
     private void LoadCoordinates()
@@ -284,9 +532,9 @@ public sealed class MainForm : Form
                 File.ReadAllText(
                     SettingsFile);
 
-            Dictionary<string, Point>? loaded =
+            Dictionary<string, Dictionary<string, Point>>? loaded =
                 JsonSerializer.Deserialize<
-                    Dictionary<string, Point>>(
+                    Dictionary<string, Dictionary<string, Point>>>(
                         json);
 
             if (loaded == null)
@@ -294,14 +542,30 @@ public sealed class MainForm : Form
                 return;
             }
 
-            foreach (var item in loaded)
+            allPoints.Clear();
+
+            foreach (var screen in loaded)
             {
-                points[item.Key] =
-                    item.Value;
+                allPoints[screen.Key] =
+                    screen.Value;
             }
 
             Log(
                 "Координаты загружены.");
+
+            foreach (string screen in screenNames)
+            {
+                if (HasAllCoordinates(screen))
+                {
+                    Log(
+                        $"{screen}: 8 координат загружено.");
+                }
+                else
+                {
+                    Log(
+                        $"{screen}: координаты настроены не полностью.");
+                }
+            }
         }
         catch (Exception ex)
         {
@@ -311,22 +575,60 @@ public sealed class MainForm : Form
         }
     }
 
-    private void ClickPoint(string name)
+    private void CheckCancellation(
+        CancellationToken token)
     {
+        if (token.IsCancellationRequested)
+        {
+            throw new OperationCanceledException(
+                token);
+        }
+    }
+
+    private void Wait(
+        int milliseconds,
+        CancellationToken token)
+    {
+        CheckCancellation(token);
+
+        if (token.WaitHandle.WaitOne(milliseconds))
+        {
+            throw new OperationCanceledException(
+                token);
+        }
+    }
+
+    private void ClickPoint(
+        string screen,
+        string name,
+        CancellationToken token)
+    {
+        CheckCancellation(token);
+
+        if (!allPoints.TryGetValue(
+            screen,
+            out Dictionary<string, Point>? points))
+        {
+            throw new Exception(
+                $"Нет координат экрана: {screen}");
+        }
+
         if (!points.TryGetValue(
             name,
             out Point p))
         {
             throw new Exception(
-                $"Нет координаты: {name}");
+                $"Нет координаты «{name}» для экрана «{screen}».");
         }
 
         Log(
-            $"Клик: {name} ({p.X},{p.Y})");
+            $"[{screen}] Клик: {name} ({p.X},{p.Y})");
 
         Cursor.Position = p;
 
-        Thread.Sleep(500);
+        Wait(500, token);
+
+        CheckCancellation(token);
 
         mouse_event(
             MOUSEEVENTF_LEFTDOWN,
@@ -335,7 +637,7 @@ public sealed class MainForm : Form
             0,
             UIntPtr.Zero);
 
-        Thread.Sleep(100);
+        Wait(100, token);
 
         mouse_event(
             MOUSEEVENTF_LEFTUP,
@@ -344,32 +646,37 @@ public sealed class MainForm : Form
             0,
             UIntPtr.Zero);
 
-        Thread.Sleep(1000);
+        Wait(1000, token);
     }
 
     private void ReplaceFileName(
-        string fileName)
+        string fileName,
+        CancellationToken token)
     {
+        CheckCancellation(token);
+
         Log(
             "Очищаем старое имя файла.");
 
         SendKeys.SendWait(
             "{HOME}");
 
-        Thread.Sleep(300);
+        Wait(300, token);
 
         SendKeys.SendWait(
             "+{END}");
 
-        Thread.Sleep(300);
+        Wait(300, token);
 
         SendKeys.SendWait(
             "{BACKSPACE}");
 
-        Thread.Sleep(500);
+        Wait(500, token);
 
         Log(
             "Старое имя удалено.");
+
+        CheckCancellation(token);
 
         Log(
             "Вводим имя файла.");
@@ -377,146 +684,228 @@ public sealed class MainForm : Form
         SendKeys.SendWait(
             fileName);
 
-        Thread.Sleep(1000);
+        Wait(1000, token);
 
         Log(
             $"Новое имя введено: {fileName}");
     }
 
     private void ExportSingleReport(
+        string screen,
         string reportPoint,
-        string fileName)
+        string fileName,
+        CancellationToken token)
     {
-        Log("");
+        CheckCancellation(token);
 
+        Log("");
         Log(
-            $"--- Начинаем: {reportPoint} ---");
+            $"--- {screen}: начинаем {reportPoint} ---");
 
         Log(
             $"Имя файла: {fileName}");
 
         ClickPoint(
-            reportPoint);
+            screen,
+            reportPoint,
+            token);
 
-        Thread.Sleep(1000);
-
-        ClickPoint(
-            "Файл");
-
-        Thread.Sleep(500);
+        Wait(1000, token);
 
         ClickPoint(
-            "Экспорт");
+            screen,
+            "Файл",
+            token);
 
-        Thread.Sleep(2000);
+        Wait(500, token);
 
         ClickPoint(
-            "Поле имени файла");
+            screen,
+            "Экспорт",
+            token);
 
-        Thread.Sleep(500);
+        Wait(2000, token);
+
+        ClickPoint(
+            screen,
+            "Поле имени файла",
+            token);
+
+        Wait(500, token);
 
         ReplaceFileName(
-            fileName);
+            fileName,
+            token);
 
-        Thread.Sleep(500);
-
-        ClickPoint(
-            "Сохранить");
-
-        Thread.Sleep(2000);
+        Wait(500, token);
 
         ClickPoint(
-            "Нет");
+            screen,
+            "Сохранить",
+            token);
 
-        Thread.Sleep(1500);
+        Wait(2000, token);
+
+        ClickPoint(
+            screen,
+            "Нет",
+            token);
+
+        Wait(1500, token);
 
         Log(
             $"Готово: {fileName}");
     }
 
-    private void ExportAllReports()
+    private void ExportScreen(
+        string screen,
+        CancellationToken token)
     {
-        if (points.Count !=
-            pointNames.Length)
-        {
-            MessageBox.Show(
-                "Нужно настроить все 8 координат.",
-                "BFN Exporter",
-                MessageBoxButtons.OK,
-                MessageBoxIcon.Warning);
+        CheckCancellation(token);
 
+        if (!HasAllCoordinates(screen))
+        {
+            throw new Exception(
+                $"Для экрана «{screen}» не настроены все 8 координат.");
+        }
+
+        Log("");
+        Log(
+            "================================");
+        Log(
+            $"НАЧАЛО ВЫГРУЗКИ: {screen}");
+        Log(
+            "================================");
+
+        DateTime today =
+            DateTime.Today;
+
+        DateTime yesterday =
+            today.AddDays(-1);
+
+        string productionFile =
+            $"{yesterday:yyyy_MM_dd} " +
+            $"{screen} " +
+            "Производственный отчет.xlsx";
+
+        ExportSingleReport(
+            screen,
+            "Отчет Производство",
+            productionFile,
+            token);
+
+        Wait(2000, token);
+
+        string damateFile =
+            $"{yesterday:yyyy_MM_dd} " +
+            $"{screen} " +
+            "Дамате клик.xlsx";
+
+        ExportSingleReport(
+            screen,
+            "Damate Qlik",
+            damateFile,
+            token);
+
+        Wait(2000, token);
+
+        string bunkerFile =
+            $"{today:yyyy_MM_dd} " +
+            $"{screen} " +
+            "Остаток корма на 00-00.xlsx";
+
+        ExportSingleReport(
+            screen,
+            "Отчет Бункер",
+            bunkerFile,
+            token);
+
+        Log("");
+        Log(
+            $"=== {screen}: ВСЕ 3 ОТЧЁТА ВЫГРУЖЕНЫ ===");
+    }
+
+    private async Task ExportAllScreens()
+    {
+        if (exportRunning)
+        {
             return;
         }
 
-        exportButton.Enabled = false;
-        setupButton.Enabled = false;
+        foreach (string screen in screenNames)
+        {
+            if (!HasAllCoordinates(screen))
+            {
+                MessageBox.Show(
+                    $"Для экрана «{screen}» ещё не настроены все 8 координат.\n\n" +
+                    "Сначала выбери этот экран в списке и нажми «Настроить координаты».",
+                    "BFN Exporter",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Warning);
+
+                return;
+            }
+        }
+
+        exportRunning = true;
+
+        exportCancellation =
+            new CancellationTokenSource();
+
+        CancellationToken token =
+            exportCancellation.Token;
+
+        SetRunningState(true);
 
         try
         {
             Log("");
-
             Log(
-                "================================");
-
+                "========================================");
             Log(
-                "НАЧАЛО ВЫГРУЗКИ 3 ОТЧЁТОВ");
-
+                "НАЧАЛО ВЫГРУЗКИ ВСЕХ 4 ЭКРАНОВ");
             Log(
-                "ПК №1 — Катковка Р-3");
+                "========================================");
 
-            Log(
-                "================================");
+            foreach (string screen in screenNames)
+            {
+                CheckCancellation(token);
 
-            DateTime today =
-                DateTime.Today;
+                Log("");
+                Log(
+                    $"ПЕРЕХОД К ЭКРАНУ: {screen}");
 
-            DateTime yesterday =
-                today.AddDays(-1);
-
-            string productionFile =
-                $"{yesterday:yyyy_MM_dd} " +
-                "Катковка Р-3 " +
-                "Производственный отчет.xlsx";
-
-            ExportSingleReport(
-                "Отчет Производство",
-                productionFile);
-
-            Thread.Sleep(2000);
-
-            string damateFile =
-                $"{yesterday:yyyy_MM_dd} " +
-                "Катковка Р-3 " +
-                "Дамате клик.xlsx";
-
-            ExportSingleReport(
-                "Damate Qlik",
-                damateFile);
-
-            Thread.Sleep(2000);
-
-            string bunkerFile =
-                $"{today:yyyy_MM_dd} " +
-                "Катковка Р-3 " +
-                "Остаток корма на 00-00.xlsx";
-
-            ExportSingleReport(
-                "Отчет Бункер",
-                bunkerFile);
+                ExportScreen(
+                    screen,
+                    token);
+            }
 
             Log("");
-
             Log(
-                "================================");
-
+                "========================================");
             Log(
-                "ВСЕ 3 ОТЧЁТА УСПЕШНО ВЫГРУЖЕНЫ");
-
+                "ВСЕ 4 ЭКРАНА УСПЕШНО ВЫГРУЖЕНЫ");
             Log(
-                "================================");
+                "========================================");
 
             MessageBox.Show(
-                "Все 3 отчёта выгружены.",
+                "Все 4 экрана успешно выгружены.",
+                "BFN Exporter",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Information);
+        }
+        catch (OperationCanceledException)
+        {
+            Log("");
+            Log(
+                "========================================");
+            Log(
+                "ОПЕРАЦИЯ ОТМЕНЕНА ПОЛЬЗОВАТЕЛЕМ");
+            Log(
+                "========================================");
+
+            MessageBox.Show(
+                "Выгрузка отменена.",
                 "BFN Exporter",
                 MessageBoxButtons.OK,
                 MessageBoxIcon.Information);
@@ -524,9 +913,12 @@ public sealed class MainForm : Form
         catch (Exception ex)
         {
             Log("");
-
             Log(
-                "ОШИБКА ПРИ ВЫГРУЗКЕ:");
+                "========================================");
+            Log(
+                "ОШИБКА ПРИ ВЫГРУЗКЕ");
+            Log(
+                "========================================");
 
             Log(
                 ex.Message);
@@ -539,13 +931,71 @@ public sealed class MainForm : Form
         }
         finally
         {
-            exportButton.Enabled = true;
-            setupButton.Enabled = true;
+            exportCancellation?.Dispose();
+            exportCancellation = null;
+
+            exportRunning = false;
+
+            SetRunningState(false);
+        }
+
+        await Task.CompletedTask;
+    }
+
+    private void CancelExport()
+    {
+        if (!exportRunning)
+        {
+            return;
+        }
+
+        Log("");
+        Log(
+            "Получена команда ОТМЕНА.");
+
+        exportCancellation?.Cancel();
+    }
+
+    private void SetRunningState(bool running)
+    {
+        if (InvokeRequired)
+        {
+            BeginInvoke(
+                new Action<bool>(
+                    SetRunningState),
+                running);
+
+            return;
+        }
+
+        exportButton.Enabled = !running;
+        setupButton.Enabled = !running;
+        cancelButton.Enabled = running;
+        screenSelector.Enabled = !running;
+
+        if (running)
+        {
+            instruction.Text =
+                "Выполняется выгрузка. Для отмены нажми ESC.";
+        }
+        else
+        {
+            UpdateInstructionForCurrentScreen();
         }
     }
 
     private void Log(string text)
     {
+        if (log.InvokeRequired)
+        {
+            log.BeginInvoke(
+                new Action<string>(
+                    Log),
+                text);
+
+            return;
+        }
+
         log.AppendText(
             $"{DateTime.Now:HH:mm:ss}  " +
             $"{text}" +
