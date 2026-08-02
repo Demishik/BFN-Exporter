@@ -59,7 +59,7 @@ public sealed class MainForm : Form
 
     private readonly string[] screenNames =
     {
-        "Н33/Н34",
+        "Н-33, Н-34",
         "Р18",
         "Р20",
         "Катковка"
