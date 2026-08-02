@@ -123,6 +123,7 @@ public sealed class MainForm : Form
         Height = 650;
         StartPosition = FormStartPosition.CenterScreen;
         KeyPreview = true;
+        KeyDown += MainForm_KeyDown;
 
         instruction.Dock = DockStyle.Top;
         instruction.Height = 65;
