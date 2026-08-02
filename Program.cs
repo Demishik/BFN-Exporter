@@ -102,15 +102,23 @@ public sealed class MainForm : Form
         log.Dock = DockStyle.Fill;
         log.ScrollBars = ScrollBars.Vertical;
 
-        exportButton.Text = "▶ Запустить экспорт 3 отчётов";
+        exportButton.Text =
+            "▶ Запустить экспорт 3 отчётов";
+
         exportButton.Dock = DockStyle.Bottom;
         exportButton.Height = 50;
-        exportButton.Click += (_, _) => ExportAllReports();
 
-        setupButton.Text = "⚙ Настроить координаты";
+        exportButton.Click +=
+            (_, _) => ExportAllReports();
+
+        setupButton.Text =
+            "⚙ Настроить координаты";
+
         setupButton.Dock = DockStyle.Bottom;
         setupButton.Height = 50;
-        setupButton.Click += (_, _) => StartSetup();
+
+        setupButton.Click +=
+            (_, _) => StartSetup();
 
         Controls.Add(log);
         Controls.Add(exportButton);
@@ -149,7 +157,8 @@ public sealed class MainForm : Form
                 "Нажми «Настроить координаты».";
         }
 
-        Log("BFN Exporter ПК №1 запущен.");
+        Log(
+            "BFN Exporter ПК №1 запущен.");
     }
 
     private void MainForm_KeyDown(
@@ -171,9 +180,11 @@ public sealed class MainForm : Form
             setupButton.Enabled = true;
             exportButton.Enabled = true;
 
-            instruction.Text = "Настройка отменена.";
+            instruction.Text =
+                "Настройка отменена.";
 
-            Log("Настройка отменена.");
+            Log(
+                "Настройка отменена.");
         }
     }
 
@@ -189,9 +200,14 @@ public sealed class MainForm : Form
         instruction.Text =
             $"Наведи мышь на «{pointNames[0]}» и нажми F8.";
 
-        Log("Настройка координат начата.");
-        Log("F8 — сохранить текущую позицию мыши.");
-        Log("ESC — отменить.");
+        Log(
+            "Настройка координат начата.");
+
+        Log(
+            "F8 — сохранить текущую позицию мыши.");
+
+        Log(
+            "ESC — отменить.");
     }
 
     private void CapturePoint()
@@ -207,11 +223,14 @@ public sealed class MainForm : Form
             return;
         }
 
-        string name = pointNames[setupIndex];
+        string name =
+            pointNames[setupIndex];
 
-        points[name] = new Point(p.X, p.Y);
+        points[name] =
+            new Point(p.X, p.Y);
 
-        Log($"{name}: X={p.X}, Y={p.Y}");
+        Log(
+            $"{name}: X={p.X}, Y={p.Y}");
 
         setupIndex++;
 
@@ -227,7 +246,8 @@ public sealed class MainForm : Form
             instruction.Text =
                 "Готово! 8 координат сохранены.";
 
-            Log("Все 8 координат сохранены.");
+            Log(
+                "Все 8 координат сохранены.");
 
             return;
         }
@@ -261,11 +281,13 @@ public sealed class MainForm : Form
             }
 
             string json =
-                File.ReadAllText(SettingsFile);
+                File.ReadAllText(
+                    SettingsFile);
 
             Dictionary<string, Point>? loaded =
                 JsonSerializer.Deserialize<
-                    Dictionary<string, Point>>(json);
+                    Dictionary<string, Point>>(
+                        json);
 
             if (loaded == null)
             {
@@ -274,10 +296,12 @@ public sealed class MainForm : Form
 
             foreach (var item in loaded)
             {
-                points[item.Key] = item.Value;
+                points[item.Key] =
+                    item.Value;
             }
 
-            Log("Координаты загружены.");
+            Log(
+                "Координаты загружены.");
         }
         catch (Exception ex)
         {
@@ -323,63 +347,37 @@ public sealed class MainForm : Form
         Thread.Sleep(1000);
     }
 
-    private void ReplaceFileName(string fileName)
+    private void ReplaceFileName(
+        string fileName)
     {
-        Log("Очищаем старое имя файла.");
+        Log(
+            "Очищаем старое имя файла.");
 
-        SendKeys.SendWait("{HOME}");
-
-        Thread.Sleep(300);
-
-        SendKeys.SendWait("+{END}");
+        SendKeys.SendWait(
+            "{HOME}");
 
         Thread.Sleep(300);
 
-        SendKeys.SendWait("{BACKSPACE}");
+        SendKeys.SendWait(
+            "+{END}");
+
+        Thread.Sleep(300);
+
+        SendKeys.SendWait(
+            "{BACKSPACE}");
 
         Thread.Sleep(500);
 
-        Log("Старое имя удалено.");
+        Log(
+            "Старое имя удалено.");
 
         Log(
-            $"Вставляем новое имя файла: {fileName}");
+            "Вводим имя файла.");
 
-        IDataObject? oldClipboard = null;
+        SendKeys.SendWait(
+            fileName);
 
-        try
-        {
-            if (Clipboard.ContainsData(
-                DataFormats.UnicodeText))
-            {
-                oldClipboard = Clipboard.GetDataObject();
-            }
-
-            Clipboard.SetText(fileName);
-
-            Thread.Sleep(300);
-
-            SendKeys.SendWait("^v");
-
-            Thread.Sleep(1000);
-        }
-        catch (Exception ex)
-        {
-            Log(
-                "Ошибка работы с буфером обмена: " +
-                ex.Message);
-
-            throw;
-        }
-        finally
-        {
-            try
-            {
-                Clipboard.Clear();
-            }
-            catch
-            {
-            }
-        }
+        Thread.Sleep(1000);
 
         Log(
             $"Новое имя введено: {fileName}");
@@ -397,31 +395,38 @@ public sealed class MainForm : Form
         Log(
             $"Имя файла: {fileName}");
 
-        ClickPoint(reportPoint);
+        ClickPoint(
+            reportPoint);
 
         Thread.Sleep(1000);
 
-        ClickPoint("Файл");
+        ClickPoint(
+            "Файл");
 
         Thread.Sleep(500);
 
-        ClickPoint("Экспорт");
+        ClickPoint(
+            "Экспорт");
 
         Thread.Sleep(2000);
 
-        ClickPoint("Поле имени файла");
+        ClickPoint(
+            "Поле имени файла");
 
         Thread.Sleep(500);
 
-        ReplaceFileName(fileName);
+        ReplaceFileName(
+            fileName);
 
         Thread.Sleep(500);
 
-        ClickPoint("Сохранить");
+        ClickPoint(
+            "Сохранить");
 
         Thread.Sleep(2000);
 
-        ClickPoint("Нет");
+        ClickPoint(
+            "Нет");
 
         Thread.Sleep(1500);
 
@@ -431,7 +436,8 @@ public sealed class MainForm : Form
 
     private void ExportAllReports()
     {
-        if (points.Count != pointNames.Length)
+        if (points.Count !=
+            pointNames.Length)
         {
             MessageBox.Show(
                 "Нужно настроить все 8 координат.",
@@ -461,7 +467,8 @@ public sealed class MainForm : Form
             Log(
                 "================================");
 
-            DateTime today = DateTime.Today;
+            DateTime today =
+                DateTime.Today;
 
             DateTime yesterday =
                 today.AddDays(-1);
@@ -503,7 +510,7 @@ public sealed class MainForm : Form
                 "================================");
 
             Log(
-                "ВСЕ 3 ОТЧЁЁТА УСПЕШНО ВЫГРУЖЕНЫ");
+                "ВСЕ 3 ОТЧЁТА УСПЕШНО ВЫГРУЖЕНЫ");
 
             Log(
                 "================================");
@@ -521,7 +528,8 @@ public sealed class MainForm : Form
             Log(
                 "ОШИБКА ПРИ ВЫГРУЗКЕ:");
 
-            Log(ex.Message);
+            Log(
+                ex.Message);
 
             MessageBox.Show(
                 ex.Message,
