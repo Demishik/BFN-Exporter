@@ -57,6 +57,10 @@ public sealed class MainForm : Form
     private const uint MOD_NOREPEAT = 0x4000;
     private const uint VK_ESCAPE = 0x1B;
 
+    // ---------------------------------------------------------
+    // 4 удалённых ПК
+    // ---------------------------------------------------------
+
     private readonly string[] screenNames =
     {
         "Н-33, Н-34",
@@ -64,6 +68,10 @@ public sealed class MainForm : Form
         "Р20",
         "Катковка"
     };
+
+    // ---------------------------------------------------------
+    // 9 координат для каждого удалённого ПК
+    // ---------------------------------------------------------
 
     private readonly string[] pointNames =
     {
@@ -78,11 +86,21 @@ public sealed class MainForm : Form
         "Вернуться"
     };
 
-    private readonly Dictionary<string, Dictionary<string, Point>> allPoints = new();
+    // ---------------------------------------------------------
+    // Координаты всех 4 экранов
+    // ---------------------------------------------------------
+
+    private readonly Dictionary<string, Dictionary<string, Point>> allPoints =
+        new();
+
+    // ---------------------------------------------------------
+    // Элементы интерфейса
+    // ---------------------------------------------------------
 
     private readonly Label instruction = new();
     private readonly Label mousePosition = new();
     private readonly Label currentScreenLabel = new();
+
     private readonly TextBox log = new();
 
     private readonly ComboBox screenSelector = new();
@@ -91,14 +109,34 @@ public sealed class MainForm : Form
     private readonly Button exportButton = new();
     private readonly Button cancelButton = new();
 
+    private readonly FlowLayoutPanel singleExportPanel =
+        new();
+
+    private readonly Button[] singleExportButtons =
+    {
+        new Button(),
+        new Button(),
+        new Button(),
+        new Button()
+    };
+
+    // ---------------------------------------------------------
+    // Состояние
+    // ---------------------------------------------------------
+
     private int setupIndex = -1;
 
     private CancellationTokenSource? exportCancellation;
+
     private bool exportRunning;
 
     private string CurrentSetupScreen =>
         screenSelector.SelectedItem?.ToString()
         ?? screenNames[0];
+
+    // ---------------------------------------------------------
+    // Файл координат
+    // ---------------------------------------------------------
 
     private string SettingsFile
     {
@@ -117,34 +155,84 @@ public sealed class MainForm : Form
         }
     }
 
+    // =========================================================
+    // СОЗДАНИЕ ОКНА
+    // =========================================================
+
     public MainForm()
     {
         Text = "BFN Exporter — 4 экрана";
-        Width = 820;
-        Height = 650;
-        StartPosition = FormStartPosition.CenterScreen;
+
+        Width = 900;
+        Height = 700;
+
+        StartPosition =
+            FormStartPosition.CenterScreen;
+
         KeyPreview = true;
+
         KeyDown += MainForm_KeyDown;
 
+        // -----------------------------------------------------
+        // Инструкция
+        // -----------------------------------------------------
+
         instruction.Dock = DockStyle.Top;
+
         instruction.Height = 65;
-        instruction.Font = new Font("Segoe UI", 12);
-        instruction.TextAlign = ContentAlignment.MiddleCenter;
 
-        mousePosition.Dock = DockStyle.Top;
+        instruction.Font =
+            new Font(
+                "Segoe UI",
+                12);
+
+        instruction.TextAlign =
+            ContentAlignment.MiddleCenter;
+
+        // -----------------------------------------------------
+        // Положение мыши
+        // -----------------------------------------------------
+
+        mousePosition.Dock =
+            DockStyle.Top;
+
         mousePosition.Height = 35;
-        mousePosition.Font = new Font("Segoe UI", 10);
-        mousePosition.TextAlign = ContentAlignment.MiddleCenter;
 
-        currentScreenLabel.Dock = DockStyle.Top;
+        mousePosition.Font =
+            new Font(
+                "Segoe UI",
+                10);
+
+        mousePosition.TextAlign =
+            ContentAlignment.MiddleCenter;
+
+        // -----------------------------------------------------
+        // Выбранный экран
+        // -----------------------------------------------------
+
+        currentScreenLabel.Dock =
+            DockStyle.Top;
+
         currentScreenLabel.Height = 35;
+
         currentScreenLabel.Font =
-            new Font("Segoe UI", 11, FontStyle.Bold);
+            new Font(
+                "Segoe UI",
+                11,
+                FontStyle.Bold);
+
         currentScreenLabel.TextAlign =
             ContentAlignment.MiddleCenter;
 
-        screenSelector.Dock = DockStyle.Top;
+        // -----------------------------------------------------
+        // Выбор экрана для настройки
+        // -----------------------------------------------------
+
+        screenSelector.Dock =
+            DockStyle.Top;
+
         screenSelector.Height = 35;
+
         screenSelector.DropDownStyle =
             ComboBoxStyle.DropDownList;
 
@@ -159,48 +247,85 @@ public sealed class MainForm : Form
         {
             UpdateCurrentScreenLabel();
 
-            if (setupIndex < 0 && !exportRunning)
+            if (setupIndex < 0 &&
+                !exportRunning)
             {
                 UpdateInstructionForCurrentScreen();
             }
         };
 
+        // -----------------------------------------------------
+        // Журнал
+        // -----------------------------------------------------
+
         log.Multiline = true;
+
         log.ReadOnly = true;
-        log.Dock = DockStyle.Fill;
-        log.ScrollBars = ScrollBars.Vertical;
+
+        log.Dock =
+            DockStyle.Fill;
+
+        log.ScrollBars =
+            ScrollBars.Vertical;
+
+        // -----------------------------------------------------
+        // Кнопка полной выгрузки
+        // -----------------------------------------------------
 
         exportButton.Text =
             "▶ ВЫГРУЗИТЬ ВСЕ 4 ЭКРАНА";
 
-        exportButton.Dock = DockStyle.Bottom;
+        exportButton.Dock =
+            DockStyle.Bottom;
+
         exportButton.Height = 55;
+
         exportButton.Font =
-            new Font("Segoe UI", 11, FontStyle.Bold);
+            new Font(
+                "Segoe UI",
+                11,
+                FontStyle.Bold);
 
         exportButton.Click += async (_, _) =>
         {
             await ExportAllScreens();
         };
 
+        // -----------------------------------------------------
+        // Кнопка отмены
+        // -----------------------------------------------------
+
         cancelButton.Text =
             "■ ОТМЕНА  (ESC)";
 
-        cancelButton.Dock = DockStyle.Bottom;
+        cancelButton.Dock =
+            DockStyle.Bottom;
+
         cancelButton.Height = 50;
+
         cancelButton.Enabled = false;
+
         cancelButton.Font =
-            new Font("Segoe UI", 10, FontStyle.Bold);
+            new Font(
+                "Segoe UI",
+                10,
+                FontStyle.Bold);
 
         cancelButton.Click += (_, _) =>
         {
             CancelExport();
         };
 
+        // -----------------------------------------------------
+        // Настройка координат
+        // -----------------------------------------------------
+
         setupButton.Text =
             "⚙ Настроить координаты выбранного экрана";
 
-        setupButton.Dock = DockStyle.Bottom;
+        setupButton.Dock =
+            DockStyle.Bottom;
+
         setupButton.Height = 50;
 
         setupButton.Click += (_, _) =>
@@ -208,14 +333,87 @@ public sealed class MainForm : Form
             StartSetup();
         };
 
+        // -----------------------------------------------------
+        // Панель отдельных выгрузок
+        // -----------------------------------------------------
+
+        singleExportPanel.Dock =
+            DockStyle.Bottom;
+
+        singleExportPanel.Height = 65;
+
+        singleExportPanel.FlowDirection =
+            FlowDirection.LeftToRight;
+
+        singleExportPanel.WrapContents =
+            false;
+
+        singleExportPanel.Padding =
+            new Padding(5);
+
+        singleExportPanel.AutoScroll =
+            true;
+
+        for (int i = 0;
+             i < singleExportButtons.Length;
+             i++)
+        {
+            int screenIndex = i;
+
+            Button button =
+                singleExportButtons[i];
+
+            button.Text =
+                $"▶ {screenNames[i]}";
+
+            button.Width = 200;
+
+            button.Height = 50;
+
+            button.Font =
+                new Font(
+                    "Segoe UI",
+                    9,
+                    FontStyle.Bold);
+
+            button.Margin =
+                new Padding(3);
+
+            button.Click += async (_, _) =>
+            {
+                await ExportSingleScreen(
+                    screenIndex);
+            };
+
+            singleExportPanel.Controls.Add(
+                button);
+        }
+
+        // -----------------------------------------------------
+        // Добавляем элементы
+        // -----------------------------------------------------
+
         Controls.Add(log);
+
+        Controls.Add(singleExportPanel);
+
         Controls.Add(exportButton);
+
         Controls.Add(cancelButton);
+
         Controls.Add(setupButton);
+
         Controls.Add(screenSelector);
+
         Controls.Add(mousePosition);
+
         Controls.Add(currentScreenLabel);
+
         Controls.Add(instruction);
+
+        // -----------------------------------------------------
+        // Таймер положения мыши
+        // -----------------------------------------------------
 
         System.Windows.Forms.Timer timer =
             new System.Windows.Forms.Timer();
@@ -233,16 +431,28 @@ public sealed class MainForm : Form
 
         timer.Start();
 
+        // -----------------------------------------------------
+        // Загрузка координат
+        // -----------------------------------------------------
+
         LoadCoordinates();
 
         UpdateCurrentScreenLabel();
 
-        Log("BFN Exporter запущен.");
+        Log(
+            "BFN Exporter запущен.");
 
         Log(
             "Настройка выполняется отдельно для каждого экрана.");
 
+        Log(
+            "Доступна отдельная выгрузка каждого из 4 экранов.");
+
         UpdateInstructionForCurrentScreen();
+
+        // -----------------------------------------------------
+        // Глобальный ESC
+        // -----------------------------------------------------
 
         if (!RegisterHotKey(
             Handle,
@@ -260,7 +470,12 @@ public sealed class MainForm : Form
         }
     }
 
-    protected override void WndProc(ref Message m)
+    // =========================================================
+    // GLOBAL HOTKEY
+    // =========================================================
+
+    protected override void WndProc(
+        ref Message m)
     {
         const int WM_HOTKEY = 0x0312;
 
@@ -280,6 +495,10 @@ public sealed class MainForm : Form
         base.WndProc(ref m);
     }
 
+    // =========================================================
+    // ЗАКРЫТИЕ ПРОГРАММЫ
+    // =========================================================
+
     protected override void OnFormClosed(
         FormClosedEventArgs e)
     {
@@ -294,10 +513,15 @@ public sealed class MainForm : Form
         }
 
         exportCancellation?.Cancel();
+
         exportCancellation?.Dispose();
 
         base.OnFormClosed(e);
     }
+
+    // =========================================================
+    // ТЕКУЩИЙ ЭКРАН
+    // =========================================================
 
     private void UpdateCurrentScreenLabel()
     {
@@ -307,7 +531,8 @@ public sealed class MainForm : Form
 
     private void UpdateInstructionForCurrentScreen()
     {
-        if (HasAllCoordinates(CurrentSetupScreen))
+        if (HasAllCoordinates(
+            CurrentSetupScreen))
         {
             instruction.Text =
                 $"Координаты для «{CurrentSetupScreen}» загружены.";
@@ -319,8 +544,13 @@ public sealed class MainForm : Form
         }
     }
 
+    // =========================================================
+    // ПОЛУЧИТЬ КООРДИНАТЫ ЭКРАНА
+    // =========================================================
+
     private Dictionary<string, Point>
-        GetOrCreateScreenPoints(string screen)
+        GetOrCreateScreenPoints(
+            string screen)
     {
         if (!allPoints.TryGetValue(
             screen,
@@ -329,13 +559,19 @@ public sealed class MainForm : Form
             points =
                 new Dictionary<string, Point>();
 
-            allPoints[screen] = points;
+            allPoints[screen] =
+                points;
         }
 
         return points;
     }
 
-    private bool HasAllCoordinates(string screen)
+    // =========================================================
+    // ПРОВЕРКА КООРДИНАТ
+    // =========================================================
+
+    private bool HasAllCoordinates(
+        string screen)
     {
         if (!allPoints.TryGetValue(
             screen,
@@ -355,6 +591,10 @@ public sealed class MainForm : Form
         return true;
     }
 
+    // =========================================================
+    // НАСТРОЙКА КООРДИНАТ
+    // =========================================================
+
     private void StartSetup()
     {
         if (exportRunning)
@@ -362,7 +602,8 @@ public sealed class MainForm : Form
             return;
         }
 
-        string screen = CurrentSetupScreen;
+        string screen =
+            CurrentSetupScreen;
 
         Dictionary<string, Point> points =
             GetOrCreateScreenPoints(screen);
@@ -372,14 +613,21 @@ public sealed class MainForm : Form
         setupIndex = 0;
 
         setupButton.Enabled = false;
+
         exportButton.Enabled = false;
+
         cancelButton.Enabled = true;
+
         screenSelector.Enabled = false;
+
+        SetSingleExportButtonsEnabled(
+            false);
 
         instruction.Text =
             $"«{screen}»: наведи мышь на «{pointNames[0]}» и нажми F8.";
 
         Log("");
+
         Log(
             $"--- Начата настройка координат: {screen} ---");
 
@@ -393,6 +641,10 @@ public sealed class MainForm : Form
             $"Нужно сохранить {pointNames.Length} координат.");
     }
 
+    // =========================================================
+    // ОТМЕНА НАСТРОЙКИ
+    // =========================================================
+
     private void CancelSetup()
     {
         if (setupIndex < 0)
@@ -400,16 +652,24 @@ public sealed class MainForm : Form
             return;
         }
 
-        string screen = CurrentSetupScreen;
+        string screen =
+            CurrentSetupScreen;
 
         setupIndex = -1;
 
-        GetOrCreateScreenPoints(screen).Clear();
+        GetOrCreateScreenPoints(
+            screen).Clear();
 
         setupButton.Enabled = true;
+
         exportButton.Enabled = true;
+
         cancelButton.Enabled = false;
+
         screenSelector.Enabled = true;
+
+        SetSingleExportButtonsEnabled(
+            true);
 
         instruction.Text =
             "Настройка отменена.";
@@ -417,6 +677,10 @@ public sealed class MainForm : Form
         Log(
             $"Настройка координат «{screen}» отменена.");
     }
+
+    // =========================================================
+    // КЛАВИАТУРА
+    // =========================================================
 
     private void MainForm_KeyDown(
         object? sender,
@@ -426,6 +690,7 @@ public sealed class MainForm : Form
             setupIndex >= 0)
         {
             e.SuppressKeyPress = true;
+
             CapturePoint();
         }
 
@@ -444,6 +709,10 @@ public sealed class MainForm : Form
         }
     }
 
+    // =========================================================
+    // СОХРАНЕНИЕ КООРДИНАТЫ
+    // =========================================================
+
     private void CapturePoint()
     {
         if (setupIndex < 0 ||
@@ -457,7 +726,8 @@ public sealed class MainForm : Form
             return;
         }
 
-        string screen = CurrentSetupScreen;
+        string screen =
+            CurrentSetupScreen;
 
         Dictionary<string, Point> points =
             GetOrCreateScreenPoints(screen);
@@ -466,7 +736,9 @@ public sealed class MainForm : Form
             pointNames[setupIndex];
 
         points[name] =
-            new Point(p.X, p.Y);
+            new Point(
+                p.X,
+                p.Y);
 
         Log(
             $"{screen} — {name}: X={p.X}, Y={p.Y}");
@@ -480,9 +752,15 @@ public sealed class MainForm : Form
             setupIndex = -1;
 
             setupButton.Enabled = true;
+
             exportButton.Enabled = true;
+
             cancelButton.Enabled = false;
+
             screenSelector.Enabled = true;
+
+            SetSingleExportButtonsEnabled(
+                true);
 
             instruction.Text =
                 $"Готово! 9 координат для «{screen}» сохранены.";
@@ -496,6 +774,10 @@ public sealed class MainForm : Form
         instruction.Text =
             $"«{screen}»: наведи мышь на «{pointNames[setupIndex]}» и нажми F8.";
     }
+
+    // =========================================================
+    // СОХРАНЕНИЕ КООРДИНАТ
+    // =========================================================
 
     private void SaveCoordinates()
     {
@@ -521,6 +803,10 @@ public sealed class MainForm : Form
         }
     }
 
+    // =========================================================
+    // ЗАГРУЗКА КООРДИНАТ
+    // =========================================================
+
     private void LoadCoordinates()
     {
         try
@@ -531,7 +817,8 @@ public sealed class MainForm : Form
             }
 
             string json =
-                File.ReadAllText(SettingsFile);
+                File.ReadAllText(
+                    SettingsFile);
 
             Dictionary<string,
                 Dictionary<string, Point>>? loaded =
@@ -578,14 +865,23 @@ public sealed class MainForm : Form
         }
     }
 
+    // =========================================================
+    // ПРОВЕРКА ОТМЕНЫ
+    // =========================================================
+
     private void CheckCancellation(
         CancellationToken token)
     {
         if (token.IsCancellationRequested)
         {
-            throw new OperationCanceledException(token);
+            throw new OperationCanceledException(
+                token);
         }
     }
+
+    // =========================================================
+    // ОЖИДАНИЕ
+    // =========================================================
 
     private void Wait(
         int milliseconds,
@@ -593,11 +889,17 @@ public sealed class MainForm : Form
     {
         CheckCancellation(token);
 
-        if (token.WaitHandle.WaitOne(milliseconds))
+        if (token.WaitHandle.WaitOne(
+            milliseconds))
         {
-            throw new OperationCanceledException(token);
+            throw new OperationCanceledException(
+                token);
         }
     }
+
+    // =========================================================
+    // КЛИК ПО КООРДИНАТЕ
+    // =========================================================
 
     private void ClickPoint(
         string screen,
@@ -627,7 +929,9 @@ public sealed class MainForm : Form
 
         Cursor.Position = p;
 
-        Wait(500, token);
+        Wait(
+            500,
+            token);
 
         CheckCancellation(token);
 
@@ -638,7 +942,9 @@ public sealed class MainForm : Form
             0,
             UIntPtr.Zero);
 
-        Wait(100, token);
+        Wait(
+            100,
+            token);
 
         mouse_event(
             MOUSEEVENTF_LEFTUP,
@@ -647,8 +953,14 @@ public sealed class MainForm : Form
             0,
             UIntPtr.Zero);
 
-        Wait(1000, token);
+        Wait(
+            1000,
+            token);
     }
+
+    // =========================================================
+    // ЗАМЕНА ИМЕНИ ФАЙЛА
+    // =========================================================
 
     private void ReplaceFileName(
         string fileName,
@@ -659,17 +971,26 @@ public sealed class MainForm : Form
         Log(
             "Очищаем старое имя файла.");
 
-        SendKeys.SendWait("{HOME}");
+        SendKeys.SendWait(
+            "{HOME}");
 
-        Wait(300, token);
+        Wait(
+            300,
+            token);
 
-        SendKeys.SendWait("+{END}");
+        SendKeys.SendWait(
+            "+{END}");
 
-        Wait(300, token);
+        Wait(
+            300,
+            token);
 
-        SendKeys.SendWait("{BACKSPACE}");
+        SendKeys.SendWait(
+            "{BACKSPACE}");
 
-        Wait(500, token);
+        Wait(
+            500,
+            token);
 
         Log(
             "Старое имя удалено.");
@@ -679,13 +1000,20 @@ public sealed class MainForm : Form
         Log(
             "Вводим имя файла.");
 
-        SendKeys.SendWait(fileName);
+        SendKeys.SendWait(
+            fileName);
 
-        Wait(1000, token);
+        Wait(
+            1000,
+            token);
 
         Log(
             $"Новое имя введено: {fileName}");
     }
+
+    // =========================================================
+    // ЗАПУСК ОТЧЁТА
+    // =========================================================
 
     private void StartReport(
         string screen,
@@ -695,6 +1023,7 @@ public sealed class MainForm : Form
         CheckCancellation(token);
 
         Log("");
+
         Log(
             $"[{screen}] Запускаем: {reportPoint}");
 
@@ -703,14 +1032,17 @@ public sealed class MainForm : Form
             reportPoint,
             token);
 
-        // Небольшая пауза только для регистрации действия.
-        // Основное время загрузки удалённого отчёта
-        // используется на других экранах.
-        Wait(500, token);
+        Wait(
+            500,
+            token);
 
         Log(
             $"[{screen}] {reportPoint} запущен.");
     }
+
+    // =========================================================
+    // СОХРАНЕНИЕ ОТЧЁТА
+    // =========================================================
 
     private void SaveReport(
         string screen,
@@ -720,6 +1052,7 @@ public sealed class MainForm : Form
         CheckCancellation(token);
 
         Log("");
+
         Log(
             $"[{screen}] Сохраняем: {fileName}");
 
@@ -728,45 +1061,61 @@ public sealed class MainForm : Form
             "Файл",
             token);
 
-        Wait(300, token);
+        Wait(
+            300,
+            token);
 
         ClickPoint(
             screen,
             "Экспорт",
             token);
 
-        Wait(1500, token);
+        Wait(
+            1500,
+            token);
 
         ClickPoint(
             screen,
             "Поле имени файла",
             token);
 
-        Wait(300, token);
+        Wait(
+            300,
+            token);
 
         ReplaceFileName(
             fileName,
             token);
 
-        Wait(300, token);
+        Wait(
+            300,
+            token);
 
         ClickPoint(
             screen,
             "Сохранить",
             token);
 
-        Wait(1500, token);
+        Wait(
+            1500,
+            token);
 
         ClickPoint(
             screen,
             "Нет",
             token);
 
-        Wait(1000, token);
+        Wait(
+            1000,
+            token);
 
         Log(
             $"[{screen}] Сохранено: {fileName}");
     }
+
+    // =========================================================
+    // ВОЗВРАТ В ИСХОДНОЕ СОСТОЯНИЕ
+    // =========================================================
 
     private void ReturnToStart(
         string screen,
@@ -782,11 +1131,17 @@ public sealed class MainForm : Form
             "Вернуться",
             token);
 
-        Wait(1000, token);
+        Wait(
+            1000,
+            token);
 
         Log(
             $"[{screen}] Возврат выполнен.");
     }
+
+    // =========================================================
+    // ИМЕНА ФАЙЛОВ
+    // =========================================================
 
     private string ProductionFile(
         string screen,
@@ -818,6 +1173,10 @@ public sealed class MainForm : Form
             "Остаток корма на 00-00.xlsx";
     }
 
+    // =========================================================
+    // ПРОВЕРКА ВСЕХ КООРДИНАТ
+    // =========================================================
+
     private void ValidateAllCoordinates()
     {
         foreach (string screen in screenNames)
@@ -830,15 +1189,247 @@ public sealed class MainForm : Form
         }
     }
 
-    private void LogRound(string title)
+    // =========================================================
+    // ПРОВЕРКА КООРДИНАТ ОДНОГО ЭКРАНА
+    // =========================================================
+
+    private void ValidateScreenCoordinates(
+        string screen)
+    {
+        if (!HasAllCoordinates(screen))
+        {
+            throw new Exception(
+                $"Для экрана «{screen}» не настроены все 9 координат.");
+        }
+    }
+
+    // =========================================================
+    // ЗАГОЛОВОК КРУГА
+    // =========================================================
+
+    private void LogRound(
+        string title)
     {
         Log("");
+
         Log(
             "========================================");
+
         Log(title);
+
         Log(
             "========================================");
     }
+
+    // =========================================================
+    // НОВОЕ:
+    // ОТДЕЛЬНАЯ ВЫГРУЗКА ОДНОГО УДАЛЁННОГО ПК
+    // =========================================================
+
+    private async Task ExportSingleScreen(
+        int screenIndex)
+    {
+        if (exportRunning)
+        {
+            return;
+        }
+
+        if (screenIndex < 0 ||
+            screenIndex >= screenNames.Length)
+        {
+            return;
+        }
+
+        string screen =
+            screenNames[screenIndex];
+
+        try
+        {
+            ValidateScreenCoordinates(
+                screen);
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(
+                ex.Message +
+                "\n\nСначала выбери этот экран и настрой 9 координат.",
+                "BFN Exporter",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Warning);
+
+            return;
+        }
+
+        exportRunning = true;
+
+        exportCancellation =
+            new CancellationTokenSource();
+
+        CancellationToken token =
+            exportCancellation.Token;
+
+        SetRunningState(true);
+
+        DateTime today =
+            DateTime.Today;
+
+        DateTime yesterday =
+            today.AddDays(-1);
+
+        try
+        {
+            Log("");
+
+            Log(
+                "========================================");
+
+            Log(
+                $"ОТДЕЛЬНАЯ ВЫГРУЗКА: {screen}");
+
+            Log(
+                "========================================");
+
+            // -------------------------------------------------
+            // 1. Производственный отчёт
+            // -------------------------------------------------
+
+            CheckCancellation(token);
+
+            StartReport(
+                screen,
+                "Отчет Производство",
+                token);
+
+            SaveReport(
+                screen,
+                ProductionFile(
+                    screen,
+                    yesterday),
+                token);
+
+            // -------------------------------------------------
+            // 2. Дамате клик
+            // -------------------------------------------------
+
+            CheckCancellation(token);
+
+            StartReport(
+                screen,
+                "Damate Qlik",
+                token);
+
+            SaveReport(
+                screen,
+                DamateFile(
+                    screen,
+                    yesterday),
+                token);
+
+            // -------------------------------------------------
+            // 3. Бункер
+            // -------------------------------------------------
+
+            CheckCancellation(token);
+
+            StartReport(
+                screen,
+                "Отчет Бункер",
+                token);
+
+            SaveReport(
+                screen,
+                BunkerFile(
+                    screen,
+                    today),
+                token);
+
+            // -------------------------------------------------
+            // 4. Возврат
+            // -------------------------------------------------
+
+            CheckCancellation(token);
+
+            ReturnToStart(
+                screen,
+                token);
+
+            Log("");
+
+            Log(
+                "========================================");
+
+            Log(
+                $"ЭКРАН «{screen}» УСПЕШНО ВЫГРУЖЕН");
+
+            Log(
+                "========================================");
+
+            MessageBox.Show(
+                $"Экран «{screen}» успешно выгружен.\n\n" +
+                "Все 3 отчёта сохранены.\n" +
+                "Экран возвращён в исходное состояние.",
+                "BFN Exporter",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Information);
+        }
+        catch (OperationCanceledException)
+        {
+            Log("");
+
+            Log(
+                "========================================");
+
+            Log(
+                $"ВЫГРУЗКА «{screen}» ОТМЕНЕНА");
+
+            Log(
+                "========================================");
+
+            MessageBox.Show(
+                $"Выгрузка экрана «{screen}» отменена.",
+                "BFN Exporter",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Information);
+        }
+        catch (Exception ex)
+        {
+            Log("");
+
+            Log(
+                "========================================");
+
+            Log(
+                $"ОШИБКА ПРИ ВЫГРУЗКЕ «{screen}»");
+
+            Log(
+                "========================================");
+
+            Log(
+                ex.Message);
+
+            MessageBox.Show(
+                ex.Message,
+                "Ошибка BFN Exporter",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Error);
+        }
+        finally
+        {
+            exportCancellation?.Dispose();
+
+            exportCancellation = null;
+
+            exportRunning = false;
+
+            SetRunningState(false);
+        }
+
+        await Task.CompletedTask;
+    }
+
+    // =========================================================
+    // ПОЛНАЯ ВЫГРУЗКА ВСЕХ 4 ЭКРАНОВ
+    // =========================================================
 
     private async Task ExportAllScreens()
     {
@@ -882,18 +1473,22 @@ public sealed class MainForm : Form
         try
         {
             Log("");
+
             Log(
                 "========================================");
+
             Log(
                 "НАЧАЛО КОНВЕЙЕРНОЙ ВЫГРУЗКИ");
+
             Log(
                 "4 ЭКРАНА × 3 ОТЧЁТА");
+
             Log(
                 "========================================");
 
             // -------------------------------------------------
             // КРУГ 1
-            // Запускаем Производственный отчет на всех 4 экранах
+            // Производственный отчёт
             // -------------------------------------------------
 
             LogRound(
@@ -911,7 +1506,7 @@ public sealed class MainForm : Form
 
             // -------------------------------------------------
             // КРУГ 2
-            // Сохраняем Производственный отчет на всех 4
+            // Сохранение Производственного отчёта
             // -------------------------------------------------
 
             LogRound(
@@ -931,7 +1526,7 @@ public sealed class MainForm : Form
 
             // -------------------------------------------------
             // КРУГ 3
-            // Запускаем Damate Qlik на всех 4
+            // Запуск Damate Qlik
             // -------------------------------------------------
 
             LogRound(
@@ -949,7 +1544,7 @@ public sealed class MainForm : Form
 
             // -------------------------------------------------
             // КРУГ 4
-            // Сохраняем Damate Qlik на всех 4
+            // Сохранение Damate Qlik
             // -------------------------------------------------
 
             LogRound(
@@ -969,7 +1564,7 @@ public sealed class MainForm : Form
 
             // -------------------------------------------------
             // КРУГ 5
-            // Запускаем Бункер на всех 4
+            // Запуск Бункера
             // -------------------------------------------------
 
             LogRound(
@@ -987,7 +1582,7 @@ public sealed class MainForm : Form
 
             // -------------------------------------------------
             // КРУГ 6
-            // Сохраняем Бункер на всех 4
+            // Сохранение Бункера
             // -------------------------------------------------
 
             LogRound(
@@ -1007,7 +1602,7 @@ public sealed class MainForm : Form
 
             // -------------------------------------------------
             // КРУГ 7
-            // Возвращаем каждый экран в исходное состояние
+            // Возврат всех экранов
             // -------------------------------------------------
 
             LogRound(
@@ -1023,12 +1618,16 @@ public sealed class MainForm : Form
             }
 
             Log("");
+
             Log(
                 "========================================");
+
             Log(
                 "ВСЕ 4 ЭКРАНА УСПЕШНО ВЫГРУЖЕНЫ");
+
             Log(
                 "ВСЕ ЭКРАНЫ ВОЗВРАЩЕНЫ В ИСХОДНОЕ СОСТОЯНИЕ");
+
             Log(
                 "========================================");
 
@@ -1042,10 +1641,13 @@ public sealed class MainForm : Form
         catch (OperationCanceledException)
         {
             Log("");
+
             Log(
                 "========================================");
+
             Log(
                 "ОПЕРАЦИЯ ОТМЕНЕНА ПОЛЬЗОВАТЕЛЕМ");
+
             Log(
                 "========================================");
 
@@ -1058,14 +1660,18 @@ public sealed class MainForm : Form
         catch (Exception ex)
         {
             Log("");
-            Log(
-                "========================================");
-            Log(
-                "ОШИБКА ПРИ ВЫГРУЗКЕ");
+
             Log(
                 "========================================");
 
-            Log(ex.Message);
+            Log(
+                "ОШИБКА ПРИ ВЫГРУЗКЕ");
+
+            Log(
+                "========================================");
+
+            Log(
+                ex.Message);
 
             MessageBox.Show(
                 ex.Message,
@@ -1076,6 +1682,7 @@ public sealed class MainForm : Form
         finally
         {
             exportCancellation?.Dispose();
+
             exportCancellation = null;
 
             exportRunning = false;
@@ -1086,6 +1693,10 @@ public sealed class MainForm : Form
         await Task.CompletedTask;
     }
 
+    // =========================================================
+    // ОТМЕНА ВЫГРУЗКИ
+    // =========================================================
+
     private void CancelExport()
     {
         if (!exportRunning)
@@ -1094,13 +1705,33 @@ public sealed class MainForm : Form
         }
 
         Log("");
+
         Log(
             "Получена команда ОТМЕНА.");
 
         exportCancellation?.Cancel();
     }
 
-    private void SetRunningState(bool running)
+    // =========================================================
+    // СОСТОЯНИЕ КНОПОК ОТДЕЛЬНОЙ ВЫГРУЗКИ
+    // =========================================================
+
+    private void SetSingleExportButtonsEnabled(
+        bool enabled)
+    {
+        foreach (Button button in singleExportButtons)
+        {
+            button.Enabled =
+                enabled;
+        }
+    }
+
+    // =========================================================
+    // СОСТОЯНИЕ ИНТЕРФЕЙСА
+    // =========================================================
+
+    private void SetRunningState(
+        bool running)
     {
         if (InvokeRequired)
         {
@@ -1112,15 +1743,25 @@ public sealed class MainForm : Form
             return;
         }
 
-        exportButton.Enabled = !running;
-        setupButton.Enabled = !running;
-        cancelButton.Enabled = running;
-        screenSelector.Enabled = !running;
+        exportButton.Enabled =
+            !running;
+
+        setupButton.Enabled =
+            !running;
+
+        cancelButton.Enabled =
+            running;
+
+        screenSelector.Enabled =
+            !running;
+
+        SetSingleExportButtonsEnabled(
+            !running);
 
         if (running)
         {
             instruction.Text =
-                "Выполняется конвейерная выгрузка. Для отмены нажми ESC.";
+                "Выполняется выгрузка. Для отмены нажми ESC.";
         }
         else
         {
@@ -1128,7 +1769,12 @@ public sealed class MainForm : Form
         }
     }
 
-    private void Log(string text)
+    // =========================================================
+    // ЖУРНАЛ
+    // =========================================================
+
+    private void Log(
+        string text)
     {
         if (log.InvokeRequired)
         {
