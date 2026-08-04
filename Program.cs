@@ -21,6 +21,10 @@ internal static class Program
 
 public sealed class MainForm : Form
 {
+    // =========================================================
+    // USER32
+    // =========================================================
+
     [DllImport("user32.dll")]
     private static extern bool GetCursorPos(out POINT p);
 
@@ -44,17 +48,9 @@ public sealed class MainForm : Form
         IntPtr hWnd,
         int id);
 
-    // =========================================================
-    // ДИАГНОСТИКА ОКОН WINDOWS
-    // =========================================================
-
     [DllImport("user32.dll")]
     private static extern bool EnumWindows(
         EnumWindowsProc lpEnumFunc,
-        IntPtr lParam);
-
-    private delegate bool EnumWindowsProc(
-        IntPtr hWnd,
         IntPtr lParam);
 
     [DllImport(
@@ -64,10 +60,6 @@ public sealed class MainForm : Form
         IntPtr hWnd,
         StringBuilder lpString,
         int nMaxCount);
-
-    [DllImport("user32.dll")]
-    private static extern int GetWindowTextLength(
-        IntPtr hWnd);
 
     [DllImport(
         "user32.dll",
@@ -81,6 +73,45 @@ public sealed class MainForm : Form
     private static extern bool IsWindowVisible(
         IntPtr hWnd);
 
+    [DllImport("user32.dll")]
+    private static extern bool IsWindow(
+        IntPtr hWnd);
+
+    [DllImport("user32.dll")]
+    private static extern bool GetWindowRect(
+        IntPtr hWnd,
+        out RECT rect);
+
+    [DllImport("user32.dll")]
+    private static extern bool ShowWindow(
+        IntPtr hWnd,
+        int nCmdShow);
+
+    [DllImport("user32.dll")]
+    private static extern bool SetForegroundWindow(
+        IntPtr hWnd);
+
+    [DllImport("user32.dll")]
+    private static extern bool BringWindowToTop(
+        IntPtr hWnd);
+
+    [DllImport("user32.dll")]
+    private static extern uint GetWindowThreadProcessId(
+        IntPtr hWnd,
+        out uint processId);
+
+    [DllImport("user32.dll")]
+    private static extern IntPtr GetForegroundWindow();
+
+    [DllImport("user32.dll")]
+    private static extern bool SetCursorPos(
+        int X,
+        int Y);
+
+    // =========================================================
+    // TYPES
+    // =========================================================
+
     [StructLayout(LayoutKind.Sequential)]
     private struct POINT
     {
@@ -88,12 +119,61 @@ public sealed class MainForm : Form
         public int Y;
     }
 
+    [StructLayout(LayoutKind.Sequential)]
+    private struct RECT
+    {
+        public int Left;
+        public int Top;
+        public int Right;
+        public int Bottom;
+    }
+
+    private delegate bool EnumWindowsProc(
+        IntPtr hWnd,
+        IntPtr lParam);
+
+    private sealed class WindowInfo
+    {
+        public IntPtr Handle { get; set; }
+
+        public string Title { get; set; } = "";
+
+        public string ClassName { get; set; } = "";
+
+        public uint ProcessId { get; set; }
+    }
+
+    // =========================================================
+    // MOUSE
+    // =========================================================
+
     private const uint MOUSEEVENTF_LEFTDOWN = 0x0002;
     private const uint MOUSEEVENTF_LEFTUP = 0x0004;
 
+    private const uint MOUSEEVENTF_MIDDLEDOWN = 0x0020;
+    private const uint MOUSEEVENTF_MIDDLEUP = 0x0040;
+
+    // =========================================================
+    // WINDOW STATES
+    // =========================================================
+
+    private const int SW_MINIMIZE = 6;
+    private const int SW_MAXIMIZE = 3;
+    private const int SW_RESTORE = 9;
+
+    // =========================================================
+    // HOTKEY
+    // =========================================================
+
     private const int HOTKEY_ESC = 1001;
+
     private const uint MOD_NOREPEAT = 0x4000;
+
     private const uint VK_ESCAPE = 0x1B;
+
+    // =========================================================
+    // ЭКРАНЫ
+    // =========================================================
 
     private readonly string[] screenNames =
     {
@@ -102,6 +182,10 @@ public sealed class MainForm : Form
         "Р20",
         "Катковка"
     };
+
+    // =========================================================
+    // КООРДИНАТЫ BFN
+    // =========================================================
 
     private readonly string[] pointNames =
     {
@@ -116,21 +200,51 @@ public sealed class MainForm : Form
         "Вернуться"
     };
 
+    // =========================================================
+    // ДАННЫЕ
+    // =========================================================
+
     private readonly Dictionary<
         string,
         Dictionary<string, Point>> allPoints = new();
 
+    // =========================================================
+    // UI
+    // =========================================================
+
     private readonly Label instruction = new();
+
     private readonly Label mousePosition = new();
+
     private readonly Label currentScreenLabel = new();
+
     private readonly TextBox log = new();
 
     private readonly ComboBox screenSelector = new();
 
     private readonly Button setupButton = new();
+
     private readonly Button exportButton = new();
+
+    private readonly Button exportScreen1Button = new();
+
+    private readonly Button exportScreen2Button = new();
+
+    private readonly Button exportScreen3Button = new();
+
+    private readonly Button exportScreen4Button = new();
+
+    private readonly Button transferButton = new();
+
+    private readonly Button lmViewerTestButton = new();
+
+    private readonly Button foldersButton = new();
+
     private readonly Button cancelButton = new();
-    private readonly Button windowsTestButton = new();
+
+    // =========================================================
+    // СОСТОЯНИЕ
+    // =========================================================
 
     private int setupIndex = -1;
 
@@ -138,33 +252,64 @@ public sealed class MainForm : Form
 
     private bool exportRunning;
 
+    // =========================================================
+    // НАСТРОЙКИ ПАПОК
+    // =========================================================
+
+    private string remoteReportsFolder = "";
+
+    private string localReportsFolder = "";
+
+    // =========================================================
+    // ТЕКУЩИЙ ЭКРАН
+    // =========================================================
+
     private string CurrentSetupScreen =>
         screenSelector.SelectedItem?.ToString()
         ?? screenNames[0];
 
-    private string SettingsFile
+    // =========================================================
+    // ФАЙЛ НАСТРОЕК
+    // =========================================================
+
+    private string SettingsFolder
     {
         get
         {
-            string folder = Path.Combine(
-                Environment.GetFolderPath(
-                    Environment.SpecialFolder.ApplicationData),
-                "BFN_Exporter");
+            string folder =
+                Path.Combine(
+                    Environment.GetFolderPath(
+                        Environment.SpecialFolder.ApplicationData),
+                    "BFN_Exporter");
 
             Directory.CreateDirectory(folder);
 
-            return Path.Combine(
-                folder,
-                "coordinates.json");
+            return folder;
         }
     }
 
+    private string SettingsFile =>
+        Path.Combine(
+            SettingsFolder,
+            "coordinates.json");
+
+    private string TransferSettingsFile =>
+        Path.Combine(
+            SettingsFolder,
+            "transfer-settings.json");
+
+    // =========================================================
+    // КОНСТРУКТОР
+    // =========================================================
+
     public MainForm()
     {
-        Text = "BFN Exporter — 4 экрана";
+        Text =
+            "BFN Exporter — 4 экрана";
 
-        Width = 820;
-        Height = 650;
+        Width = 900;
+
+        Height = 850;
 
         StartPosition =
             FormStartPosition.CenterScreen;
@@ -180,7 +325,8 @@ public sealed class MainForm : Form
         instruction.Dock =
             DockStyle.Top;
 
-        instruction.Height = 65;
+        instruction.Height =
+            65;
 
         instruction.Font =
             new Font(
@@ -191,13 +337,14 @@ public sealed class MainForm : Form
             ContentAlignment.MiddleCenter;
 
         // -----------------------------------------------------
-        // Положение мыши
+        // Мышь
         // -----------------------------------------------------
 
         mousePosition.Dock =
             DockStyle.Top;
 
-        mousePosition.Height = 35;
+        mousePosition.Height =
+            35;
 
         mousePosition.Font =
             new Font(
@@ -208,13 +355,14 @@ public sealed class MainForm : Form
             ContentAlignment.MiddleCenter;
 
         // -----------------------------------------------------
-        // Текущий экран
+        // Экран
         // -----------------------------------------------------
 
         currentScreenLabel.Dock =
             DockStyle.Top;
 
-        currentScreenLabel.Height = 35;
+        currentScreenLabel.Height =
+            35;
 
         currentScreenLabel.Font =
             new Font(
@@ -232,14 +380,16 @@ public sealed class MainForm : Form
         screenSelector.Dock =
             DockStyle.Top;
 
-        screenSelector.Height = 35;
+        screenSelector.Height =
+            35;
 
         screenSelector.DropDownStyle =
             ComboBoxStyle.DropDownList;
 
         foreach (string screen in screenNames)
         {
-            screenSelector.Items.Add(screen);
+            screenSelector.Items.Add(
+                screen);
         }
 
         screenSelector.SelectedIndex = 0;
@@ -261,13 +411,17 @@ public sealed class MainForm : Form
         // -----------------------------------------------------
 
         log.Multiline = true;
+
         log.ReadOnly = true;
-        log.Dock = DockStyle.Fill;
+
+        log.Dock =
+            DockStyle.Fill;
+
         log.ScrollBars =
             ScrollBars.Vertical;
 
         // -----------------------------------------------------
-        // Общая выгрузка
+        // ОБЩАЯ ВЫГРУЗКА
         // -----------------------------------------------------
 
         exportButton.Text =
@@ -276,7 +430,8 @@ public sealed class MainForm : Form
         exportButton.Dock =
             DockStyle.Bottom;
 
-        exportButton.Height = 55;
+        exportButton.Height =
+            55;
 
         exportButton.Font =
             new Font(
@@ -291,7 +446,144 @@ public sealed class MainForm : Form
             };
 
         // -----------------------------------------------------
-        // Отмена
+        // ОТДЕЛЬНЫЕ ЭКРАНЫ
+        // -----------------------------------------------------
+
+        exportScreen1Button.Text =
+            "Выгрузить Н-33, Н-34";
+
+        exportScreen1Button.Dock =
+            DockStyle.Bottom;
+
+        exportScreen1Button.Height =
+            42;
+
+        exportScreen1Button.Click +=
+            async (_, _) =>
+            {
+                await ExportSingleScreen(
+                    "Н-33, Н-34");
+            };
+
+        exportScreen2Button.Text =
+            "Выгрузить Р18";
+
+        exportScreen2Button.Dock =
+            DockStyle.Bottom;
+
+        exportScreen2Button.Height =
+            42;
+
+        exportScreen2Button.Click +=
+            async (_, _) =>
+            {
+                await ExportSingleScreen(
+                    "Р18");
+            };
+
+        exportScreen3Button.Text =
+            "Выгрузить Р20";
+
+        exportScreen3Button.Dock =
+            DockStyle.Bottom;
+
+        exportScreen3Button.Height =
+            42;
+
+        exportScreen3Button.Click +=
+            async (_, _) =>
+            {
+                await ExportSingleScreen(
+                    "Р20");
+            };
+
+        exportScreen4Button.Text =
+            "Выгрузить Катковка";
+
+        exportScreen4Button.Dock =
+            DockStyle.Bottom;
+
+        exportScreen4Button.Height =
+            42;
+
+        exportScreen4Button.Click +=
+            async (_, _) =>
+            {
+                await ExportSingleScreen(
+                    "Катковка");
+            };
+
+        // -----------------------------------------------------
+        // LM VIEWER TEST
+        // -----------------------------------------------------
+
+        lmViewerTestButton.Text =
+            "🔍 ТЕСТ LM VIEWER";
+
+        lmViewerTestButton.Dock =
+            DockStyle.Bottom;
+
+        lmViewerTestButton.Height =
+            45;
+
+        lmViewerTestButton.Font =
+            new Font(
+                "Segoe UI",
+                10,
+                FontStyle.Bold);
+
+        lmViewerTestButton.Click +=
+            async (_, _) =>
+            {
+                await TestLmViewer();
+            };
+
+        // -----------------------------------------------------
+        // ПАПКИ
+        // -----------------------------------------------------
+
+        foldersButton.Text =
+            "📁 НАСТРОИТЬ ПАПКИ ОТЧЁТОВ";
+
+        foldersButton.Dock =
+            DockStyle.Bottom;
+
+        foldersButton.Height =
+            42;
+
+        foldersButton.Click +=
+            (_, _) =>
+            {
+                ConfigureTransferFolders();
+            };
+
+        // -----------------------------------------------------
+        // ПЕРЕСЛАТЬ
+        // -----------------------------------------------------
+
+        transferButton.Text =
+            "⇄ ПЕРЕСЛАТЬ ОТЧЁТЫ";
+
+        transferButton.Dock =
+            DockStyle.Bottom;
+
+        transferButton.Height =
+            48;
+
+        transferButton.Font =
+            new Font(
+                "Segoe UI",
+                10,
+                FontStyle.Bold);
+
+        transferButton.Click +=
+            (_, _) =>
+            {
+                StartTransferTest();
+            };
+
+        // -----------------------------------------------------
+        // ОТМЕНА
         // -----------------------------------------------------
 
         cancelButton.Text =
@@ -300,9 +592,11 @@ public sealed class MainForm : Form
         cancelButton.Dock =
             DockStyle.Bottom;
 
-        cancelButton.Height = 50;
+        cancelButton.Height =
+            45;
 
-        cancelButton.Enabled = false;
+        cancelButton.Enabled =
+            false;
 
         cancelButton.Font =
             new Font(
@@ -317,7 +611,7 @@ public sealed class MainForm : Form
             };
 
         // -----------------------------------------------------
-        // Настройка координат
+        // НАСТРОЙКА КООРДИНАТ
         // -----------------------------------------------------
 
         setupButton.Text =
@@ -326,7 +620,8 @@ public sealed class MainForm : Form
         setupButton.Dock =
             DockStyle.Bottom;
 
-        setupButton.Height = 50;
+        setupButton.Height =
+            48;
 
         setupButton.Click +=
             (_, _) =>
@@ -335,56 +630,68 @@ public sealed class MainForm : Form
             };
 
         // -----------------------------------------------------
-        // Диагностика окон
-        // -----------------------------------------------------
-
-        windowsTestButton.Text =
-            "🔍 ПОКАЗАТЬ ОКНА";
-
-        windowsTestButton.Dock =
-            DockStyle.Bottom;
-
-        windowsTestButton.Height = 50;
-
-        windowsTestButton.Font =
-            new Font(
-                "Segoe UI",
-                10,
-                FontStyle.Bold);
-
-        windowsTestButton.Click +=
-            (_, _) =>
-            {
-                ShowAllWindows();
-            };
-
-        // -----------------------------------------------------
-        // Добавление элементов
+        // CONTROLS
         // -----------------------------------------------------
 
         Controls.Add(log);
-        Controls.Add(exportButton);
-        Controls.Add(cancelButton);
-        Controls.Add(windowsTestButton);
-        Controls.Add(setupButton);
-        Controls.Add(screenSelector);
-        Controls.Add(mousePosition);
-        Controls.Add(currentScreenLabel);
-        Controls.Add(instruction);
+
+        Controls.Add(
+            setupButton);
+
+        Controls.Add(
+            cancelButton);
+
+        Controls.Add(
+            transferButton);
+
+        Controls.Add(
+            foldersButton);
+
+        Controls.Add(
+            lmViewerTestButton);
+
+        Controls.Add(
+            exportScreen4Button);
+
+        Controls.Add(
+            exportScreen3Button);
+
+        Controls.Add(
+            exportScreen2Button);
+
+        Controls.Add(
+            exportScreen1Button);
+
+        Controls.Add(
+            exportButton);
+
+        Controls.Add(
+            screenSelector);
+
+        Controls.Add(
+            mousePosition);
+
+        Controls.Add(
+            currentScreenLabel);
+
+        Controls.Add(
+            instruction);
 
         // -----------------------------------------------------
-        // Таймер положения мыши
+        // TIMER
         // -----------------------------------------------------
 
         System.Windows.Forms.Timer timer =
             new System.Windows.Forms.Timer();
 
-        timer.Interval = 100;
+        timer.Interval =
+            100;
 
         timer.Tick +=
             (_, _) =>
             {
-                if (GetCursorPos(out POINT p))
+                if (GetCursorPos(
+                    out POINT p))
                 {
                     mousePosition.Text =
                         $"Положение мыши: X={p.X}   Y={p.Y}";
@@ -394,10 +701,12 @@ public sealed class MainForm : Form
         timer.Start();
 
         // -----------------------------------------------------
-        // Загрузка координат
+        // ЗАГРУЗКА
         // -----------------------------------------------------
 
         LoadCoordinates();
+
+        LoadTransferSettings();
 
         UpdateCurrentScreenLabel();
 
@@ -405,19 +714,28 @@ public sealed class MainForm : Form
             "BFN Exporter запущен.");
 
         Log(
-            "Настройка выполняется отдельно для каждого экрана.");
+            "Координаты существующей выгрузки сохранены.");
+
+        Log(
+            "Доступна выгрузка всех 4 экранов.");
+
+        Log(
+            "Доступна отдельная выгрузка каждого экрана.");
+
+        Log(
+            "Добавлен безопасный тест LM Viewer.");
 
         UpdateInstructionForCurrentScreen();
 
         // -----------------------------------------------------
-        // Глобальный ESC
+        // ESC
         // -----------------------------------------------------
 
         if (!RegisterHotKey(
-                Handle,
-                HOTKEY_ESC,
-                MOD_NOREPEAT,
-                VK_ESCAPE))
+            Handle,
+            HOTKEY_ESC,
+            MOD_NOREPEAT,
+            VK_ESCAPE))
         {
             Log(
                 "ВНИМАНИЕ: не удалось зарегистрировать глобальную клавишу ESC.");
@@ -430,103 +748,14 @@ public sealed class MainForm : Form
     }
 
     // =========================================================
-    // ДИАГНОСТИКА ВСЕХ ОКОН
-    // =========================================================
-
-    private void ShowAllWindows()
-    {
-        if (exportRunning ||
-            setupIndex >= 0)
-        {
-            MessageBox.Show(
-                "Сначала дождись окончания текущей операции.",
-                "BFN Exporter",
-                MessageBoxButtons.OK,
-                MessageBoxIcon.Warning);
-
-            return;
-        }
-
-        Log("");
-        Log("========================================");
-        Log("ДИАГНОСТИКА ОКОН WINDOWS");
-        Log("========================================");
-
-        int count = 0;
-
-        try
-        {
-            EnumWindows(
-                (hWnd, _) =>
-                {
-                    if (!IsWindowVisible(hWnd))
-                    {
-                        return true;
-                    }
-
-                    StringBuilder title =
-                        new StringBuilder(512);
-
-                    StringBuilder className =
-                        new StringBuilder(512);
-
-                    GetWindowText(
-                        hWnd,
-                        title,
-                        title.Capacity);
-
-                    GetClassName(
-                        hWnd,
-                        className,
-                        className.Capacity);
-
-                    string windowTitle =
-                        title.ToString().Trim();
-
-                    string windowClass =
-                        className.ToString().Trim();
-
-                    if (string.IsNullOrWhiteSpace(
-                            windowTitle))
-                    {
-                        return true;
-                    }
-
-                    count++;
-
-                    Log(
-                        $"#{count} | " +
-                        $"HWND={hWnd} | " +
-                        $"Title=\"{windowTitle}\" | " +
-                        $"Class=\"{windowClass}\"");
-
-                    return true;
-                },
-                IntPtr.Zero);
-
-            Log("");
-            Log(
-                $"Всего найдено видимых окон с заголовком: {count}");
-            Log("========================================");
-            Log("ДИАГНОСТИКА ЗАВЕРШЕНА");
-            Log("========================================");
-        }
-        catch (Exception ex)
-        {
-            Log(
-                "Ошибка диагностики окон: " +
-                ex.Message);
-        }
-    }
-
-    // =========================================================
     // WNDPROC
     // =========================================================
 
     protected override void WndProc(
         ref Message m)
     {
-        const int WM_HOTKEY = 0x0312;
+        const int WM_HOTKEY =
+            0x0312;
 
         if (m.Msg == WM_HOTKEY &&
             m.WParam.ToInt32() ==
@@ -542,11 +771,12 @@ public sealed class MainForm : Form
             }
         }
 
-        base.WndProc(ref m);
+        base.WndProc(
+            ref m);
     }
 
     // =========================================================
-    // ЗАКРЫТИЕ
+    // CLOSE
     // =========================================================
 
     protected override void OnFormClosed(
@@ -563,9 +793,11 @@ public sealed class MainForm : Form
         }
 
         exportCancellation?.Cancel();
+
         exportCancellation?.Dispose();
 
-        base.OnFormClosed(e);
+        base.OnFormClosed(
+            e);
     }
 
     // =========================================================
@@ -581,7 +813,7 @@ public sealed class MainForm : Form
     private void UpdateInstructionForCurrentScreen()
     {
         if (HasAllCoordinates(
-                CurrentSetupScreen))
+            CurrentSetupScreen))
         {
             instruction.Text =
                 $"Координаты для «{CurrentSetupScreen}» загружены.";
@@ -602,8 +834,8 @@ public sealed class MainForm : Form
             string screen)
     {
         if (!allPoints.TryGetValue(
-                screen,
-                out Dictionary<string, Point>? points))
+            screen,
+            out Dictionary<string, Point>? points))
         {
             points =
                 new Dictionary<string, Point>();
@@ -619,8 +851,8 @@ public sealed class MainForm : Form
         string screen)
     {
         if (!allPoints.TryGetValue(
-                screen,
-                out Dictionary<string, Point>? points))
+            screen,
+            out Dictionary<string, Point>? points))
         {
             return false;
         }
@@ -628,7 +860,7 @@ public sealed class MainForm : Form
         foreach (string pointName in pointNames)
         {
             if (!points.ContainsKey(
-                    pointName))
+                pointName))
             {
                 return false;
             }
@@ -638,7 +870,7 @@ public sealed class MainForm : Form
     }
 
     // =========================================================
-    // НАСТРОЙКА
+    // НАСТРОЙКА КООРДИНАТ
     // =========================================================
 
     private void StartSetup()
@@ -652,28 +884,46 @@ public sealed class MainForm : Form
             CurrentSetupScreen;
 
         Dictionary<string, Point> points =
-            GetOrCreateScreenPoints(screen);
+            GetOrCreateScreenPoints(
+                screen);
 
         points.Clear();
 
         setupIndex = 0;
 
         setupButton.Enabled = false;
+
         exportButton.Enabled = false;
+
+        exportScreen1Button.Enabled = false;
+        exportScreen2Button.Enabled = false;
+        exportScreen3Button.Enabled = false;
+        exportScreen4Button.Enabled = false;
+
+        transferButton.Enabled = false;
+
+        lmViewerTestButton.Enabled = false;
+
+        foldersButton.Enabled = false;
+
         cancelButton.Enabled = true;
+
         screenSelector.Enabled = false;
-        windowsTestButton.Enabled = false;
 
         instruction.Text =
             $"«{screen}»: наведи мышь на «{pointNames[0]}» и нажми F8.";
 
         Log("");
+
         Log(
             $"--- Начата настройка координат: {screen} ---");
+
         Log(
             "F8 — сохранить текущую позицию мыши.");
+
         Log(
             "ESC — отменить настройку.");
+
         Log(
             $"Нужно сохранить {pointNames.Length} координат.");
     }
@@ -690,14 +940,27 @@ public sealed class MainForm : Form
 
         setupIndex = -1;
 
-        GetOrCreateScreenPoints(screen)
-            .Clear();
+        GetOrCreateScreenPoints(
+            screen).Clear();
 
         setupButton.Enabled = true;
+
         exportButton.Enabled = true;
+
+        exportScreen1Button.Enabled = true;
+        exportScreen2Button.Enabled = true;
+        exportScreen3Button.Enabled = true;
+        exportScreen4Button.Enabled = true;
+
+        transferButton.Enabled = true;
+
+        lmViewerTestButton.Enabled = true;
+
+        foldersButton.Enabled = true;
+
         cancelButton.Enabled = false;
+
         screenSelector.Enabled = true;
-        windowsTestButton.Enabled = true;
 
         instruction.Text =
             "Настройка отменена.";
@@ -718,6 +981,7 @@ public sealed class MainForm : Form
             setupIndex >= 0)
         {
             e.SuppressKeyPress = true;
+
             CapturePoint();
         }
 
@@ -737,7 +1001,7 @@ public sealed class MainForm : Form
     }
 
     // =========================================================
-    // СОХРАНЕНИЕ ТОЧКИ
+    // CAPTURE POINT
     // =========================================================
 
     private void CapturePoint()
@@ -749,7 +1013,7 @@ public sealed class MainForm : Form
         }
 
         if (!GetCursorPos(
-                out POINT p))
+            out POINT p))
         {
             return;
         }
@@ -758,7 +1022,8 @@ public sealed class MainForm : Form
             CurrentSetupScreen;
 
         Dictionary<string, Point> points =
-            GetOrCreateScreenPoints(screen);
+            GetOrCreateScreenPoints(
+                screen);
 
         string name =
             pointNames[setupIndex];
@@ -780,10 +1045,23 @@ public sealed class MainForm : Form
             setupIndex = -1;
 
             setupButton.Enabled = true;
+
             exportButton.Enabled = true;
+
+            exportScreen1Button.Enabled = true;
+            exportScreen2Button.Enabled = true;
+            exportScreen3Button.Enabled = true;
+            exportScreen4Button.Enabled = true;
+
+            transferButton.Enabled = true;
+
+            lmViewerTestButton.Enabled = true;
+
+            foldersButton.Enabled = true;
+
             cancelButton.Enabled = false;
+
             screenSelector.Enabled = true;
-            windowsTestButton.Enabled = true;
 
             instruction.Text =
                 $"Готово! 9 координат для «{screen}» сохранены.";
@@ -835,7 +1113,7 @@ public sealed class MainForm : Form
         try
         {
             if (!File.Exists(
-                    SettingsFile))
+                SettingsFile))
             {
                 return;
             }
@@ -871,7 +1149,8 @@ public sealed class MainForm : Form
 
             foreach (string screen in screenNames)
             {
-                if (HasAllCoordinates(screen))
+                if (HasAllCoordinates(
+                    screen))
                 {
                     Log(
                         $"{screen}: 9 координат загружено.");
@@ -892,7 +1171,7 @@ public sealed class MainForm : Form
     }
 
     // =========================================================
-    // CANCEL CHECK
+    // CANCEL / WAIT
     // =========================================================
 
     private void CheckCancellation(
@@ -909,10 +1188,11 @@ public sealed class MainForm : Form
         int milliseconds,
         CancellationToken token)
     {
-        CheckCancellation(token);
+        CheckCancellation(
+            token);
 
         if (token.WaitHandle.WaitOne(
-                milliseconds))
+            milliseconds))
         {
             throw new OperationCanceledException(
                 token);
@@ -928,19 +1208,20 @@ public sealed class MainForm : Form
         string name,
         CancellationToken token)
     {
-        CheckCancellation(token);
+        CheckCancellation(
+            token);
 
         if (!allPoints.TryGetValue(
-                screen,
-                out Dictionary<string, Point>? points))
+            screen,
+            out Dictionary<string, Point>? points))
         {
             throw new Exception(
                 $"Нет координат экрана: {screen}");
         }
 
         if (!points.TryGetValue(
-                name,
-                out Point p))
+            name,
+            out Point p))
         {
             throw new Exception(
                 $"Нет координаты «{name}» для экрана «{screen}».");
@@ -949,13 +1230,15 @@ public sealed class MainForm : Form
         Log(
             $"[{screen}] Клик: {name} ({p.X},{p.Y})");
 
-        Cursor.Position = p;
+        Cursor.Position =
+            p;
 
         Wait(
             500,
             token);
 
-        CheckCancellation(token);
+        CheckCancellation(
+            token);
 
         mouse_event(
             MOUSEEVENTF_LEFTDOWN,
@@ -988,7 +1271,8 @@ public sealed class MainForm : Form
         string fileName,
         CancellationToken token)
     {
-        CheckCancellation(token);
+        CheckCancellation(
+            token);
 
         Log(
             "Очищаем старое имя файла.");
@@ -1017,7 +1301,8 @@ public sealed class MainForm : Form
         Log(
             "Старое имя удалено.");
 
-        CheckCancellation(token);
+        CheckCancellation(
+            token);
 
         Log(
             "Вводим имя файла.");
@@ -1042,9 +1327,11 @@ public sealed class MainForm : Form
         string reportPoint,
         CancellationToken token)
     {
-        CheckCancellation(token);
+        CheckCancellation(
+            token);
 
         Log("");
+
         Log(
             $"[{screen}] Запускаем: {reportPoint}");
 
@@ -1070,9 +1357,11 @@ public sealed class MainForm : Form
         string fileName,
         CancellationToken token)
     {
-        CheckCancellation(token);
+        CheckCancellation(
+            token);
 
         Log("");
+
         Log(
             $"[{screen}] Сохраняем: {fileName}");
 
@@ -1141,7 +1430,8 @@ public sealed class MainForm : Form
         string screen,
         CancellationToken token)
     {
-        CheckCancellation(token);
+        CheckCancellation(
+            token);
 
         Log(
             $"[{screen}] Возврат в исходное состояние.");
@@ -1160,7 +1450,7 @@ public sealed class MainForm : Form
     }
 
     // =========================================================
-    // ИМЕНА ФАЙЛОВ
+    // FILE NAMES
     // =========================================================
 
     private string ProductionFile(
@@ -1194,14 +1484,15 @@ public sealed class MainForm : Form
     }
 
     // =========================================================
-    // ПРОВЕРКА КООРДИНАТ
+    // VALIDATE
     // =========================================================
 
     private void ValidateAllCoordinates()
     {
         foreach (string screen in screenNames)
         {
-            if (!HasAllCoordinates(screen))
+            if (!HasAllCoordinates(
+                screen))
             {
                 throw new Exception(
                     $"Для экрана «{screen}» не настроены все 9 координат.");
@@ -1209,23 +1500,38 @@ public sealed class MainForm : Form
         }
     }
 
+    private void ValidateScreenCoordinates(
+        string screen)
+    {
+        if (!HasAllCoordinates(
+            screen))
+        {
+            throw new Exception(
+                $"Для экрана «{screen}» не настроены все 9 координат.");
+        }
+    }
+
     // =========================================================
-    // ЗАГОЛОВОК ЖУРНАЛА
+    // LOG ROUND
     // =========================================================
 
     private void LogRound(
         string title)
     {
         Log("");
+
         Log(
             "========================================");
-        Log(title);
+
+        Log(
+            title);
+
         Log(
             "========================================");
     }
 
     // =========================================================
-    // ЭКСПОРТ ВСЕХ ЭКРАНОВ
+    // ОБЩАЯ ВЫГРУЗКА
     // =========================================================
 
     private async Task ExportAllScreens()
@@ -1243,7 +1549,7 @@ public sealed class MainForm : Form
         {
             MessageBox.Show(
                 ex.Message +
-                "\n\nСначала выбери нужный экран и настрой 9 координат.",
+                "\n\nСначала настрой необходимые координаты.",
                 "BFN Exporter",
                 MessageBoxButtons.OK,
                 MessageBoxIcon.Warning);
@@ -1259,7 +1565,8 @@ public sealed class MainForm : Form
         CancellationToken token =
             exportCancellation.Token;
 
-        SetRunningState(true);
+        SetRunningState(
+            true);
 
         DateTime today =
             DateTime.Today;
@@ -1269,15 +1576,8 @@ public sealed class MainForm : Form
 
         try
         {
-            Log("");
-            Log(
-                "========================================");
-            Log(
-                "НАЧАЛО КОНВЕЙЕРНОЙ ВЫГРУЗКИ");
-            Log(
-                "4 ЭКРАНА × 3 ОТЧЁТА");
-            Log(
-                "========================================");
+            LogRound(
+                "НАЧАЛО КОНВЕЙЕРНОЙ ВЫГРУЗКИ — 4 ЭКРАНА");
 
             // -------------------------------------------------
             // КРУГ 1
@@ -1288,7 +1588,8 @@ public sealed class MainForm : Form
 
             foreach (string screen in screenNames)
             {
-                CheckCancellation(token);
+                CheckCancellation(
+                    token);
 
                 StartReport(
                     screen,
@@ -1305,7 +1606,8 @@ public sealed class MainForm : Form
 
             foreach (string screen in screenNames)
             {
-                CheckCancellation(token);
+                CheckCancellation(
+                    token);
 
                 SaveReport(
                     screen,
@@ -1324,7 +1626,8 @@ public sealed class MainForm : Form
 
             foreach (string screen in screenNames)
             {
-                CheckCancellation(token);
+                CheckCancellation(
+                    token);
 
                 StartReport(
                     screen,
@@ -1341,7 +1644,8 @@ public sealed class MainForm : Form
 
             foreach (string screen in screenNames)
             {
-                CheckCancellation(token);
+                CheckCancellation(
+                    token);
 
                 SaveReport(
                     screen,
@@ -1360,7 +1664,8 @@ public sealed class MainForm : Form
 
             foreach (string screen in screenNames)
             {
-                CheckCancellation(token);
+                CheckCancellation(
+                    token);
 
                 StartReport(
                     screen,
@@ -1377,7 +1682,8 @@ public sealed class MainForm : Form
 
             foreach (string screen in screenNames)
             {
-                CheckCancellation(token);
+                CheckCancellation(
+                    token);
 
                 SaveReport(
                     screen,
@@ -1396,22 +1702,16 @@ public sealed class MainForm : Form
 
             foreach (string screen in screenNames)
             {
-                CheckCancellation(token);
+                CheckCancellation(
+                    token);
 
                 ReturnToStart(
                     screen,
                     token);
             }
 
-            Log("");
-            Log(
-                "========================================");
-            Log(
+            LogRound(
                 "ВСЕ 4 ЭКРАНА УСПЕШНО ВЫГРУЖЕНЫ");
-            Log(
-                "ВСЕ ЭКРАНЫ ВОЗВРАЩЕНЫ В ИСХОДНОЕ СОСТОЯНИЕ");
-            Log(
-                "========================================");
 
             MessageBox.Show(
                 "Все 4 экрана успешно выгружены.\n\n" +
@@ -1422,13 +1722,8 @@ public sealed class MainForm : Form
         }
         catch (OperationCanceledException)
         {
-            Log("");
             Log(
-                "========================================");
-            Log(
-                "ОПЕРАЦИЯ ОТМЕНЕНА ПОЛЬЗОВАТЕЛЕМ");
-            Log(
-                "========================================");
+                "ОПЕРАЦИЯ ОТМЕНЕНА ПОЛЬЗОВАТЕЛЕМ.");
 
             MessageBox.Show(
                 "Выгрузка отменена.",
@@ -1438,15 +1733,11 @@ public sealed class MainForm : Form
         }
         catch (Exception ex)
         {
-            Log("");
             Log(
-                "========================================");
+                "ОШИБКА ПРИ ВЫГРУЗКЕ:");
+
             Log(
-                "ОШИБКА ПРИ ВЫГРУЗКЕ");
-            Log(
-                "========================================");
-            Log(
-                ex.Message);
+                ex.ToString());
 
             MessageBox.Show(
                 ex.Message,
@@ -1462,7 +1753,199 @@ public sealed class MainForm : Form
 
             exportRunning = false;
 
-            SetRunningState(false);
+            SetRunningState(
+                false);
+        }
+
+        await Task.CompletedTask;
+    }
+
+    // =========================================================
+    // ОТДЕЛЬНАЯ ВЫГРУЗКА ОДНОГО ЭКРАНА
+    // =========================================================
+
+    private async Task ExportSingleScreen(
+        string screen)
+    {
+        if (exportRunning)
+        {
+            return;
+        }
+
+        try
+        {
+            ValidateScreenCoordinates(
+                screen);
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(
+                ex.Message,
+                "BFN Exporter",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Warning);
+
+            return;
+        }
+
+        exportRunning = true;
+
+        exportCancellation =
+            new CancellationTokenSource();
+
+        CancellationToken token =
+            exportCancellation.Token;
+
+        SetRunningState(
+            true);
+
+        DateTime today =
+            DateTime.Today;
+
+        DateTime yesterday =
+            today.AddDays(-1);
+
+        bool returnedToStart =
+            false;
+
+        try
+        {
+            LogRound(
+                $"ОТДЕЛЬНАЯ ВЫГРУЗКА — {screen}");
+
+            // -------------------------------------------------
+            // ПРОИЗВОДСТВЕННЫЙ
+            // -------------------------------------------------
+
+            LogRound(
+                $"[{screen}] ПРОИЗВОДСТВЕННЫЙ ОТЧЁТ");
+
+            StartReport(
+                screen,
+                "Отчет Производство",
+                token);
+
+            SaveReport(
+                screen,
+                ProductionFile(
+                    screen,
+                    yesterday),
+                token);
+
+            // -------------------------------------------------
+            // DAMATE
+            // -------------------------------------------------
+
+            LogRound(
+                $"[{screen}] DAMATE QLIK");
+
+            StartReport(
+                screen,
+                "Damate Qlik",
+                token);
+
+            SaveReport(
+                screen,
+                DamateFile(
+                    screen,
+                    yesterday),
+                token);
+
+            // -------------------------------------------------
+            // БУНКЕР
+            // -------------------------------------------------
+
+            LogRound(
+                $"[{screen}] ОТЧЁТ БУНКЕР");
+
+            StartReport(
+                screen,
+                "Отчет Бункер",
+                token);
+
+            SaveReport(
+                screen,
+                BunkerFile(
+                    screen,
+                    today),
+                token);
+
+            // -------------------------------------------------
+            // ВОЗВРАТ
+            // -------------------------------------------------
+
+            LogRound(
+                $"[{screen}] ВОЗВРАТ");
+
+            ReturnToStart(
+                screen,
+                token);
+
+            returnedToStart = true;
+
+            LogRound(
+                $"ЭКРАН «{screen}» УСПЕШНО ВЫГРУЖЕН");
+
+            MessageBox.Show(
+                $"Экран «{screen}» успешно выгружен.\n\n" +
+                "Все 3 отчёта сохранены.",
+                "BFN Exporter",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Information);
+        }
+        catch (OperationCanceledException)
+        {
+            Log(
+                $"Выгрузка «{screen}» отменена.");
+
+            MessageBox.Show(
+                $"Выгрузка «{screen}» отменена.",
+                "BFN Exporter",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Information);
+        }
+        catch (Exception ex)
+        {
+            Log(
+                $"ОШИБКА ПРИ ВЫГРУЗКЕ «{screen}»");
+
+            Log(
+                ex.ToString());
+
+            MessageBox.Show(
+                ex.Message,
+                "Ошибка BFN Exporter",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Error);
+        }
+        finally
+        {
+            // Если произошла ошибка после открытия отчёта,
+            // стараемся вернуть экран.
+            if (!returnedToStart)
+            {
+                try
+                {
+                    if (!token.IsCancellationRequested)
+                    {
+                        ReturnToStart(
+                            screen,
+                            token);
+                    }
+                }
+                catch
+                {
+                }
+            }
+
+            exportCancellation?.Dispose();
+
+            exportCancellation = null;
+
+            exportRunning = false;
+
+            SetRunningState(
+                false);
         }
 
         await Task.CompletedTask;
@@ -1480,6 +1963,7 @@ public sealed class MainForm : Form
         }
 
         Log("");
+
         Log(
             "Получена команда ОТМЕНА.");
 
@@ -1487,7 +1971,7 @@ public sealed class MainForm : Form
     }
 
     // =========================================================
-    // СОСТОЯНИЕ
+    // UI STATE
     // =========================================================
 
     private void SetRunningState(
@@ -1506,7 +1990,28 @@ public sealed class MainForm : Form
         exportButton.Enabled =
             !running;
 
+        exportScreen1Button.Enabled =
+            !running;
+
+        exportScreen2Button.Enabled =
+            !running;
+
+        exportScreen3Button.Enabled =
+            !running;
+
+        exportScreen4Button.Enabled =
+            !running;
+
         setupButton.Enabled =
+            !running;
+
+        transferButton.Enabled =
+            !running;
+
+        lmViewerTestButton.Enabled =
+            !running;
+
+        foldersButton.Enabled =
             !running;
 
         cancelButton.Enabled =
@@ -1515,18 +2020,898 @@ public sealed class MainForm : Form
         screenSelector.Enabled =
             !running;
 
-        windowsTestButton.Enabled =
-            !running;
-
         if (running)
         {
             instruction.Text =
-                "Выполняется конвейерная выгрузка. Для отмены нажми ESC.";
+                "Выполняется операция. Для отмены нажми ESC.";
         }
         else
         {
             UpdateInstructionForCurrentScreen();
         }
+    }
+
+    // =========================================================
+    // LM VIEWER
+    // =========================================================
+
+    private static bool IsLmViewerWindow(
+        WindowInfo window)
+    {
+        string text =
+            (window.Title + " " +
+             window.ClassName)
+            .ToLowerInvariant();
+
+        return
+            text.Contains("litemanager") ||
+            text.Contains("lite manager") ||
+            text.Contains("lm viewer") ||
+            text.Contains("lmviewer");
+    }
+
+    private List<WindowInfo> GetVisibleWindows()
+    {
+        List<WindowInfo> result =
+            new();
+
+        EnumWindows(
+            (hWnd, _) =>
+            {
+                if (!IsWindowVisible(
+                    hWnd))
+                {
+                    return true;
+                }
+
+                StringBuilder title =
+                    new StringBuilder(512);
+
+                StringBuilder className =
+                    new StringBuilder(512);
+
+                GetWindowText(
+                    hWnd,
+                    title,
+                    title.Capacity);
+
+                GetClassName(
+                    hWnd,
+                    className,
+                    className.Capacity);
+
+                string titleText =
+                    title.ToString().Trim();
+
+                string classText =
+                    className.ToString().Trim();
+
+                if (string.IsNullOrWhiteSpace(
+                    titleText))
+                {
+                    return true;
+                }
+
+                GetWindowThreadProcessId(
+                    hWnd,
+                    out uint processId);
+
+                result.Add(
+                    new WindowInfo
+                    {
+                        Handle = hWnd,
+                        Title = titleText,
+                        ClassName = classText,
+                        ProcessId = processId
+                    });
+
+                return true;
+            },
+            IntPtr.Zero);
+
+        return result;
+    }
+
+    private WindowInfo? FindLmViewer()
+    {
+        List<WindowInfo> windows =
+            GetVisibleWindows();
+
+        foreach (WindowInfo window in windows)
+        {
+            if (IsLmViewerWindow(
+                window))
+            {
+                return window;
+            }
+        }
+
+        return null;
+    }
+
+    private static HashSet<IntPtr>
+        GetWindowHandles(
+            List<WindowInfo> windows)
+    {
+        HashSet<IntPtr> result =
+            new();
+
+        foreach (WindowInfo window in windows)
+        {
+            result.Add(
+                window.Handle);
+        }
+
+        return result;
+    }
+
+    private static WindowInfo?
+        FindNewWindow(
+            List<WindowInfo> before,
+            IntPtr originalHandle)
+    {
+        HashSet<IntPtr> oldHandles =
+            GetWindowHandles(
+                before);
+
+        List<WindowInfo> after =
+            new();
+
+        EnumWindows(
+            (hWnd, _) =>
+            {
+                if (!IsWindowVisible(
+                    hWnd))
+                {
+                    return true;
+                }
+
+                if (hWnd ==
+                    originalHandle)
+                {
+                    return true;
+                }
+
+                if (oldHandles.Contains(
+                    hWnd))
+                {
+                    return true;
+                }
+
+                StringBuilder title =
+                    new StringBuilder(512);
+
+                StringBuilder className =
+                    new StringBuilder(512);
+
+                GetWindowText(
+                    hWnd,
+                    title,
+                    title.Capacity);
+
+                GetClassName(
+                    hWnd,
+                    className,
+                    className.Capacity);
+
+                string titleText =
+                    title.ToString().Trim();
+
+                string classText =
+                    className.ToString().Trim();
+
+                if (string.IsNullOrWhiteSpace(
+                    titleText))
+                {
+                    return true;
+                }
+
+                GetWindowThreadProcessId(
+                    hWnd,
+                    out uint processId);
+
+                after.Add(
+                    new WindowInfo
+                    {
+                        Handle = hWnd,
+                        Title = titleText,
+                        ClassName = classText,
+                        ProcessId = processId
+                    });
+
+                return true;
+            },
+            IntPtr.Zero);
+
+        if (after.Count == 0)
+        {
+            return null;
+        }
+
+        // Сначала ищем новое окно,
+        // которое принадлежит тому же процессу.
+        WindowInfo? original =
+            before.Find(
+                x => x.Handle ==
+                     originalHandle);
+
+        if (original != null)
+        {
+            WindowInfo? sameProcess =
+                after.Find(
+                    x => x.ProcessId ==
+                         original.ProcessId);
+
+            if (sameProcess != null)
+            {
+                return sameProcess;
+            }
+        }
+
+        return after[0];
+    }
+
+    // =========================================================
+    // MIDDLE CLICK
+    // =========================================================
+
+    private void MiddleClickWindow(
+        IntPtr hWnd)
+    {
+        if (!GetWindowRect(
+            hWnd,
+            out RECT rect))
+        {
+            throw new Exception(
+                "Не удалось получить положение окна LM Viewer.");
+        }
+
+        int x =
+            rect.Left +
+            ((rect.Right - rect.Left) / 2);
+
+        int y =
+            rect.Top +
+            ((rect.Bottom - rect.Top) / 2);
+
+        Log(
+            $"LM Viewer: средний клик X={x}, Y={y}");
+
+        SetCursorPos(
+            x,
+            y);
+
+        Thread.Sleep(
+            300);
+
+        mouse_event(
+            MOUSEEVENTF_MIDDLEDOWN,
+            0,
+            0,
+            0,
+            UIntPtr.Zero);
+
+        Thread.Sleep(
+            100);
+
+        mouse_event(
+            MOUSEEVENTF_MIDDLEUP,
+            0,
+            0,
+            0,
+            UIntPtr.Zero);
+    }
+
+    // =========================================================
+    // ТЕСТ LM VIEWER
+    // =========================================================
+
+    private async Task TestLmViewer()
+    {
+        if (exportRunning)
+        {
+            return;
+        }
+
+        lmViewerTestButton.Enabled =
+            false;
+
+        try
+        {
+            Log("");
+
+            LogRound(
+                "ТЕСТ LM VIEWER");
+
+            WindowInfo? lmViewer =
+                FindLmViewer();
+
+            if (lmViewer == null)
+            {
+                Log(
+                    "LM Viewer не найден среди открытых окон.");
+
+                MessageBox.Show(
+                    "Не удалось найти открытое окно LM Viewer.\n\n" +
+                    "Убедись, что LM Viewer уже запущен.",
+                    "LM Viewer",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Warning);
+
+                return;
+            }
+
+            Log(
+                $"LM Viewer найден.");
+
+            Log(
+                $"HWND: {lmViewer.Handle}");
+
+            Log(
+                $"Название: \"{lmViewer.Title}\"");
+
+            Log(
+                $"Класс: \"{lmViewer.ClassName}\"");
+
+            Log(
+                $"PID: {lmViewer.ProcessId}");
+
+            List<WindowInfo> before =
+                GetVisibleWindows();
+
+            Log(
+                $"До среднего клика окон: {before.Count}");
+
+            // -------------------------------------------------
+            // Средний клик
+            // -------------------------------------------------
+
+            SetForegroundWindow(
+                lmViewer.Handle);
+
+            BringWindowToTop(
+                lmViewer.Handle);
+
+            await Task.Delay(
+                500);
+
+            MiddleClickWindow(
+                lmViewer.Handle);
+
+            Log(
+                "Средний клик выполнен.");
+
+            // -------------------------------------------------
+            // Ждём новое окно
+            // -------------------------------------------------
+
+            WindowInfo? newWindow = null;
+
+            for (int i = 0; i < 30; i++)
+            {
+                await Task.Delay(
+                    300);
+
+                newWindow =
+                    FindNewWindow(
+                        before,
+                        lmViewer.Handle);
+
+                if (newWindow != null)
+                {
+                    break;
+                }
+            }
+
+            if (newWindow == null)
+            {
+                Log(
+                    "После среднего клика новое окно не обнаружено.");
+
+                MessageBox.Show(
+                    "LM Viewer найден, но новое окно после среднего клика обнаружить не удалось.\n\n" +
+                    "Ничего не закрываю.",
+                    "LM Viewer",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Warning);
+
+                return;
+            }
+
+            Log("");
+
+            Log(
+                "НОВОЕ ОКНО LM VIEWER НАЙДЕНО:");
+
+            Log(
+                $"HWND: {newWindow.Handle}");
+
+            Log(
+                $"Название: \"{newWindow.Title}\"");
+
+            Log(
+                $"Класс: \"{newWindow.ClassName}\"");
+
+            Log(
+                $"PID: {newWindow.ProcessId}");
+
+            // -------------------------------------------------
+            // Разворачиваем
+            // -------------------------------------------------
+
+            ShowWindow(
+                newWindow.Handle,
+                SW_RESTORE);
+
+            await Task.Delay(
+                300);
+
+            ShowWindow(
+                newWindow.Handle,
+                SW_MAXIMIZE);
+
+            SetForegroundWindow(
+                newWindow.Handle);
+
+            BringWindowToTop(
+                newWindow.Handle);
+
+            await Task.Delay(
+                1000);
+
+            Log(
+                "Новое окно развёрнуто на весь экран.");
+
+            // -------------------------------------------------
+            // Пока ничего внутри не трогаем.
+            // Только показываем полученные данные.
+            // -------------------------------------------------
+
+            MessageBox.Show(
+                "Тест LM Viewer прошёл.\n\n" +
+                $"Название нового окна:\n{newWindow.Title}\n\n" +
+                $"Класс:\n{newWindow.ClassName}\n\n" +
+                "Теперь эти данные можно использовать для автоматизации файлового режима.",
+                "LM Viewer — тест",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Information);
+
+            // -------------------------------------------------
+            // Закрываем именно новое окно
+            // -------------------------------------------------
+
+            if (IsWindow(
+                newWindow.Handle))
+            {
+                Log(
+                    "Закрываем новое окно LM Viewer.");
+
+                SendKeys.SendWait(
+                    "%{F4}");
+
+                await Task.Delay(
+                    1000);
+
+                if (IsWindow(
+                    newWindow.Handle))
+                {
+                    ShowWindow(
+                        newWindow.Handle,
+                        SW_MINIMIZE);
+                }
+            }
+
+            // -------------------------------------------------
+            // Исходный LM Viewer только сворачиваем
+            // -------------------------------------------------
+
+            if (IsWindow(
+                lmViewer.Handle))
+            {
+                Log(
+                    "Исходный LM Viewer не закрываем — только сворачиваем.");
+
+                ShowWindow(
+                    lmViewer.Handle,
+                    SW_MINIMIZE);
+            }
+
+            Log(
+                "ТЕСТ LM VIEWER ЗАВЕРШЁН.");
+        }
+        catch (Exception ex)
+        {
+            Log(
+                "Ошибка теста LM Viewer:");
+
+            Log(
+                ex.ToString());
+
+            MessageBox.Show(
+                ex.Message,
+                "Ошибка LM Viewer",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Error);
+        }
+        finally
+        {
+            lmViewerTestButton.Enabled =
+                !exportRunning;
+        }
+    }
+
+    // =========================================================
+    // НАСТРОЙКА ПАПОК
+    // =========================================================
+
+    private void ConfigureTransferFolders()
+    {
+        if (exportRunning)
+        {
+            return;
+        }
+
+        using Form form =
+            new Form();
+
+        form.Text =
+            "Папки для передачи отчётов";
+
+        form.Width =
+            720;
+
+        form.Height =
+            260;
+
+        form.StartPosition =
+            FormStartPosition.CenterParent;
+
+        Label remoteLabel =
+            new Label
+            {
+                Text =
+                    "Папка с отчётами на удалённых ПК:",
+                Left = 20,
+                Top = 20,
+                Width = 650
+            };
+
+        TextBox remoteBox =
+            new TextBox
+            {
+                Left = 20,
+                Top = 45,
+                Width = 540,
+                Text =
+                    remoteReportsFolder
+            };
+
+        Button remoteBrowse =
+            new Button
+            {
+                Text = "...",
+                Left = 570,
+                Top = 43,
+                Width = 70
+            };
+
+        remoteBrowse.Click +=
+            (_, _) =>
+            {
+                using FolderBrowserDialog dialog =
+                    new FolderBrowserDialog();
+
+                dialog.Description =
+                    "Выбери папку с отчётами на удалённом ПК.";
+
+                if (!string.IsNullOrWhiteSpace(
+                    remoteBox.Text) &&
+                    Directory.Exists(
+                        remoteBox.Text))
+                {
+                    dialog.SelectedPath =
+                        remoteBox.Text;
+                }
+
+                if (dialog.ShowDialog(
+                    form) ==
+                    DialogResult.OK)
+                {
+                    remoteBox.Text =
+                        dialog.SelectedPath;
+                }
+            };
+
+        Label localLabel =
+            new Label
+            {
+                Text =
+                    "Папка на твоём ПК, куда складывать отчёты:",
+                Left = 20,
+                Top = 85,
+                Width = 650
+            };
+
+        TextBox localBox =
+            new TextBox
+            {
+                Left = 20,
+                Top = 110,
+                Width = 540,
+                Text =
+                    localReportsFolder
+            };
+
+        Button localBrowse =
+            new Button
+            {
+                Text = "...",
+                Left = 570,
+                Top = 108,
+                Width = 70
+            };
+
+        localBrowse.Click +=
+            (_, _) =>
+            {
+                using FolderBrowserDialog dialog =
+                    new FolderBrowserDialog();
+
+                dialog.Description =
+                    "Выбери папку на своём ПК.";
+
+                if (!string.IsNullOrWhiteSpace(
+                    localBox.Text) &&
+                    Directory.Exists(
+                        localBox.Text))
+                {
+                    dialog.SelectedPath =
+                        localBox.Text;
+                }
+
+                if (dialog.ShowDialog(
+                    form) ==
+                    DialogResult.OK)
+                {
+                    localBox.Text =
+                        dialog.SelectedPath;
+                }
+            };
+
+        Button save =
+            new Button
+            {
+                Text =
+                    "Сохранить",
+                Left = 530,
+                Top = 165,
+                Width = 110,
+                Height = 35
+            };
+
+        Button cancel =
+            new Button
+            {
+                Text =
+                    "Отмена",
+                Left = 410,
+                Top = 165,
+                Width = 110,
+                Height = 35
+            };
+
+        save.Click +=
+            (_, _) =>
+            {
+                remoteReportsFolder =
+                    remoteBox.Text.Trim();
+
+                localReportsFolder =
+                    localBox.Text.Trim();
+
+                SaveTransferSettings();
+
+                Log("");
+
+                Log(
+                    "Настройки папок сохранены.");
+
+                Log(
+                    $"Удалённая папка: {remoteReportsFolder}");
+
+                Log(
+                    $"Локальная папка: {localReportsFolder}");
+
+                form.DialogResult =
+                    DialogResult.OK;
+
+                form.Close();
+            };
+
+        cancel.Click +=
+            (_, _) =>
+            {
+                form.Close();
+            };
+
+        form.Controls.Add(
+            remoteLabel);
+
+        form.Controls.Add(
+            remoteBox);
+
+        form.Controls.Add(
+            remoteBrowse);
+
+        form.Controls.Add(
+            localLabel);
+
+        form.Controls.Add(
+            localBox);
+
+        form.Controls.Add(
+            localBrowse);
+
+        form.Controls.Add(
+            save);
+
+        form.Controls.Add(
+            cancel);
+
+        form.ShowDialog(
+            this);
+    }
+
+    // =========================================================
+    // SAVE TRANSFER SETTINGS
+    // =========================================================
+
+    private void SaveTransferSettings()
+    {
+        try
+        {
+            TransferSettings settings =
+                new TransferSettings
+                {
+                    RemoteReportsFolder =
+                        remoteReportsFolder,
+
+                    LocalReportsFolder =
+                        localReportsFolder
+                };
+
+            string json =
+                JsonSerializer.Serialize(
+                    settings,
+                    new JsonSerializerOptions
+                    {
+                        WriteIndented = true
+                    });
+
+            File.WriteAllText(
+                TransferSettingsFile,
+                json);
+        }
+        catch (Exception ex)
+        {
+            Log(
+                "Ошибка сохранения настроек папок: " +
+                ex.Message);
+        }
+    }
+
+    // =========================================================
+    // LOAD TRANSFER SETTINGS
+    // =========================================================
+
+    private void LoadTransferSettings()
+    {
+        try
+        {
+            if (!File.Exists(
+                TransferSettingsFile))
+            {
+                return;
+            }
+
+            string json =
+                File.ReadAllText(
+                    TransferSettingsFile);
+
+            TransferSettings? settings =
+                JsonSerializer.Deserialize<
+                    TransferSettings>(
+                        json);
+
+            if (settings == null)
+            {
+                return;
+            }
+
+            remoteReportsFolder =
+                settings.RemoteReportsFolder ??
+                "";
+
+            localReportsFolder =
+                settings.LocalReportsFolder ??
+                "";
+
+            Log(
+                "Настройки папок загружены.");
+        }
+        catch (Exception ex)
+        {
+            Log(
+                "Ошибка загрузки настроек папок: " +
+                ex.Message);
+        }
+    }
+
+    // =========================================================
+    // TRANSFER SETTINGS CLASS
+    // =========================================================
+
+    private sealed class TransferSettings
+    {
+        public string RemoteReportsFolder { get; set; } = "";
+
+        public string LocalReportsFolder { get; set; } = "";
+    }
+
+    // =========================================================
+    // ПЕРЕСЛАТЬ ОТЧЁТЫ
+    // =========================================================
+
+    private void StartTransferTest()
+    {
+        if (exportRunning)
+        {
+            return;
+        }
+
+        Log("");
+
+        LogRound(
+            "ПЕРЕСЛАТЬ ОТЧЁТЫ");
+
+        if (string.IsNullOrWhiteSpace(
+            remoteReportsFolder) ||
+            string.IsNullOrWhiteSpace(
+                localReportsFolder))
+        {
+            Log(
+                "Папки ещё не настроены.");
+
+            MessageBox.Show(
+                "Сначала нажми «Настроить папки отчётов» и укажи:\n\n" +
+                "1. папку с отчётами на удалённых ПК;\n" +
+                "2. папку на своём ПК.",
+                "Переслать отчёты",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Information);
+
+            return;
+        }
+
+        Log(
+            $"Источник: {remoteReportsFolder}");
+
+        Log(
+            $"Назначение: {localReportsFolder}");
+
+        Log(
+            "LM Viewer пока запускается только в тестовом режиме.");
+
+        Log(
+            "Файлы пока НЕ переносятся.");
+
+        MessageBox.Show(
+            "Папки сохранены.\n\n" +
+            "Следующим этапом подключаем реальный перенос файлов через файловое окно LM Viewer.\n\n" +
+            "Сейчас файлы специально не трогаются.",
+            "Переслать отчёты",
+            MessageBoxButtons.OK,
+            MessageBoxIcon.Information);
     }
 
     // =========================================================
