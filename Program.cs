@@ -21,10 +21,6 @@ internal static class Program
 
 public sealed class MainForm : Form
 {
-    // =========================================================
-    // WINAPI
-    // =========================================================
-
     [DllImport("user32.dll")]
     private static extern bool GetCursorPos(out POINT p);
 
@@ -48,9 +44,9 @@ public sealed class MainForm : Form
         IntPtr hWnd,
         int id);
 
-    // ---------------------------------------------------------
-    // LM VIEWER
-    // ---------------------------------------------------------
+    // =========================================================
+    // ДИАГНОСТИКА ОКОН WINDOWS
+    // =========================================================
 
     [DllImport("user32.dll")]
     private static extern bool EnumWindows(
@@ -70,27 +66,20 @@ public sealed class MainForm : Form
         int nMaxCount);
 
     [DllImport("user32.dll")]
-    private static extern bool IsWindowVisible(
+    private static extern int GetWindowTextLength(
         IntPtr hWnd);
 
-    [DllImport("user32.dll")]
-    private static extern bool GetWindowRect(
+    [DllImport(
+        "user32.dll",
+        CharSet = CharSet.Unicode)]
+    private static extern int GetClassName(
         IntPtr hWnd,
-        out RECT lpRect);
+        StringBuilder lpClassName,
+        int nMaxCount);
 
     [DllImport("user32.dll")]
-    private static extern bool ShowWindow(
-        IntPtr hWnd,
-        int nCmdShow);
-
-    [StructLayout(LayoutKind.Sequential)]
-    private struct RECT
-    {
-        public int Left;
-        public int Top;
-        public int Right;
-        public int Bottom;
-    }
+    private static extern bool IsWindowVisible(
+        IntPtr hWnd);
 
     [StructLayout(LayoutKind.Sequential)]
     private struct POINT
@@ -99,33 +88,12 @@ public sealed class MainForm : Form
         public int Y;
     }
 
-    // =========================================================
-    // MOUSE
-    // =========================================================
-
     private const uint MOUSEEVENTF_LEFTDOWN = 0x0002;
     private const uint MOUSEEVENTF_LEFTUP = 0x0004;
-
-    private const uint MOUSEEVENTF_MIDDLEDOWN = 0x0020;
-    private const uint MOUSEEVENTF_MIDDLEUP = 0x0040;
-
-    // =========================================================
-    // SHOW WINDOW
-    // =========================================================
-
-    private const int SW_MAXIMIZE = 3;
-
-    // =========================================================
-    // HOTKEY
-    // =========================================================
 
     private const int HOTKEY_ESC = 1001;
     private const uint MOD_NOREPEAT = 0x4000;
     private const uint VK_ESCAPE = 0x1B;
-
-    // =========================================================
-    // ЭКРАНЫ
-    // =========================================================
 
     private readonly string[] screenNames =
     {
@@ -134,10 +102,6 @@ public sealed class MainForm : Form
         "Р20",
         "Катковка"
     };
-
-    // =========================================================
-    // КООРДИНАТЫ
-    // =========================================================
 
     private readonly string[] pointNames =
     {
@@ -156,10 +120,6 @@ public sealed class MainForm : Form
         string,
         Dictionary<string, Point>> allPoints = new();
 
-    // =========================================================
-    // UI
-    // =========================================================
-
     private readonly Label instruction = new();
     private readonly Label mousePosition = new();
     private readonly Label currentScreenLabel = new();
@@ -170,13 +130,7 @@ public sealed class MainForm : Form
     private readonly Button setupButton = new();
     private readonly Button exportButton = new();
     private readonly Button cancelButton = new();
-
-    // НОВАЯ КНОПКА LM VIEWER
-    private readonly Button lmViewerTestButton = new();
-
-    // =========================================================
-    // СОСТОЯНИЕ
-    // =========================================================
+    private readonly Button windowsTestButton = new();
 
     private int setupIndex = -1;
 
@@ -188,19 +142,14 @@ public sealed class MainForm : Form
         screenSelector.SelectedItem?.ToString()
         ?? screenNames[0];
 
-    // =========================================================
-    // ФАЙЛ НАСТРОЕК
-    // =========================================================
-
     private string SettingsFile
     {
         get
         {
-            string folder =
-                Path.Combine(
-                    Environment.GetFolderPath(
-                        Environment.SpecialFolder.ApplicationData),
-                    "BFN_Exporter");
+            string folder = Path.Combine(
+                Environment.GetFolderPath(
+                    Environment.SpecialFolder.ApplicationData),
+                "BFN_Exporter");
 
             Directory.CreateDirectory(folder);
 
@@ -209,10 +158,6 @@ public sealed class MainForm : Form
                 "coordinates.json");
         }
     }
-
-    // =========================================================
-    // CONSTRUCTOR
-    // =========================================================
 
     public MainForm()
     {
@@ -322,7 +267,7 @@ public sealed class MainForm : Form
             ScrollBars.Vertical;
 
         // -----------------------------------------------------
-        // Кнопка выгрузки
+        // Общая выгрузка
         // -----------------------------------------------------
 
         exportButton.Text =
@@ -346,7 +291,7 @@ public sealed class MainForm : Form
             };
 
         // -----------------------------------------------------
-        // Кнопка отмены
+        // Отмена
         // -----------------------------------------------------
 
         cancelButton.Text =
@@ -390,27 +335,27 @@ public sealed class MainForm : Form
             };
 
         // -----------------------------------------------------
-        // НОВАЯ КНОПКА LM VIEWER
+        // Диагностика окон
         // -----------------------------------------------------
 
-        lmViewerTestButton.Text =
-            "🖥 ТЕСТ LM VIEWER";
+        windowsTestButton.Text =
+            "🔍 ПОКАЗАТЬ ОКНА";
 
-        lmViewerTestButton.Dock =
+        windowsTestButton.Dock =
             DockStyle.Bottom;
 
-        lmViewerTestButton.Height = 50;
+        windowsTestButton.Height = 50;
 
-        lmViewerTestButton.Font =
+        windowsTestButton.Font =
             new Font(
                 "Segoe UI",
                 10,
                 FontStyle.Bold);
 
-        lmViewerTestButton.Click +=
-            async (_, _) =>
+        windowsTestButton.Click +=
+            (_, _) =>
             {
-                await TestLmViewer();
+                ShowAllWindows();
             };
 
         // -----------------------------------------------------
@@ -418,21 +363,13 @@ public sealed class MainForm : Form
         // -----------------------------------------------------
 
         Controls.Add(log);
-
         Controls.Add(exportButton);
-
         Controls.Add(cancelButton);
-
-        Controls.Add(lmViewerTestButton);
-
+        Controls.Add(windowsTestButton);
         Controls.Add(setupButton);
-
         Controls.Add(screenSelector);
-
         Controls.Add(mousePosition);
-
         Controls.Add(currentScreenLabel);
-
         Controls.Add(instruction);
 
         // -----------------------------------------------------
@@ -473,7 +410,7 @@ public sealed class MainForm : Form
         UpdateInstructionForCurrentScreen();
 
         // -----------------------------------------------------
-        // ESC
+        // Глобальный ESC
         // -----------------------------------------------------
 
         if (!RegisterHotKey(
@@ -493,105 +430,16 @@ public sealed class MainForm : Form
     }
 
     // =========================================================
-    // ПОИСК ОКНА LM VIEWER
+    // ДИАГНОСТИКА ВСЕХ ОКОН
     // =========================================================
 
-    private IntPtr FindLmViewerWindow()
-    {
-        IntPtr result =
-            IntPtr.Zero;
-
-        EnumWindows(
-            (hWnd, _) =>
-            {
-                if (!IsWindowVisible(hWnd))
-                {
-                    return true;
-                }
-
-                StringBuilder title =
-                    new StringBuilder(512);
-
-                GetWindowText(
-                    hWnd,
-                    title,
-                    title.Capacity);
-
-                string text =
-                    title.ToString();
-
-                if (text.Contains(
-                        "LM Viewer",
-                        StringComparison.OrdinalIgnoreCase))
-                {
-                    result = hWnd;
-
-                    return false;
-                }
-
-                return true;
-
-            },
-            IntPtr.Zero);
-
-        return result;
-    }
-
-    // =========================================================
-    // ПОЛУЧИТЬ ВСЕ ВИДИМЫЕ ОКНА LM VIEWER
-    // =========================================================
-
-    private HashSet<IntPtr>
-        GetVisibleLmViewerWindows()
-    {
-        HashSet<IntPtr> windows =
-            new();
-
-        EnumWindows(
-            (hWnd, _) =>
-            {
-                if (!IsWindowVisible(hWnd))
-                {
-                    return true;
-                }
-
-                StringBuilder title =
-                    new StringBuilder(512);
-
-                GetWindowText(
-                    hWnd,
-                    title,
-                    title.Capacity);
-
-                string text =
-                    title.ToString();
-
-                if (text.Contains(
-                        "LM Viewer",
-                        StringComparison.OrdinalIgnoreCase))
-                {
-                    windows.Add(hWnd);
-                }
-
-                return true;
-
-            },
-            IntPtr.Zero);
-
-        return windows;
-    }
-
-    // =========================================================
-    // ТЕСТ LM VIEWER
-    // =========================================================
-
-    private async Task TestLmViewer()
+    private void ShowAllWindows()
     {
         if (exportRunning ||
             setupIndex >= 0)
         {
             MessageBox.Show(
-                "Сначала дождись окончания другой операции.",
+                "Сначала дождись окончания текущей операции.",
                 "BFN Exporter",
                 MessageBoxButtons.OK,
                 MessageBoxIcon.Warning);
@@ -599,230 +447,75 @@ public sealed class MainForm : Form
             return;
         }
 
-        lmViewerTestButton.Enabled = false;
+        Log("");
+        Log("========================================");
+        Log("ДИАГНОСТИКА ОКОН WINDOWS");
+        Log("========================================");
+
+        int count = 0;
 
         try
         {
-            Log("");
-
-            Log(
-                "========================================");
-
-            Log(
-                "ТЕСТ LM VIEWER");
-
-            Log(
-                "========================================");
-
-            // -------------------------------------------------
-            // 1. Ищем исходное окно
-            // -------------------------------------------------
-
-            Log(
-                "Ищем уже открытое окно LM Viewer...");
-
-            IntPtr originalWindow =
-                FindLmViewerWindow();
-
-            if (originalWindow ==
-                IntPtr.Zero)
-            {
-                Log(
-                    "ОШИБКА: окно LM Viewer не найдено.");
-
-                MessageBox.Show(
-                    "Не удалось найти открытое окно LM Viewer.",
-                    "BFN Exporter",
-                    MessageBoxButtons.OK,
-                    MessageBoxIcon.Warning);
-
-                return;
-            }
-
-            Log(
-                $"Исходное окно LM Viewer найдено: {originalWindow}");
-
-            // -------------------------------------------------
-            // 2. Запоминаем существующие окна
-            // -------------------------------------------------
-
-            HashSet<IntPtr> before =
-                GetVisibleLmViewerWindows();
-
-            // -------------------------------------------------
-            // 3. Получаем центр исходного окна
-            // -------------------------------------------------
-
-            if (!GetWindowRect(
-                    originalWindow,
-                    out RECT rect))
-            {
-                throw new Exception(
-                    "Не удалось получить положение окна LM Viewer.");
-            }
-
-            int centerX =
-                rect.Left +
-                ((rect.Right - rect.Left) / 2);
-
-            int centerY =
-                rect.Top +
-                ((rect.Bottom - rect.Top) / 2);
-
-            // -------------------------------------------------
-            // 4. Наводим мышь
-            // -------------------------------------------------
-
-            Log(
-                $"Наводим мышь на LM Viewer: X={centerX}, Y={centerY}");
-
-            Cursor.Position =
-                new Point(
-                    centerX,
-                    centerY);
-
-            await Task.Delay(300);
-
-            // -------------------------------------------------
-            // 5. Нажимаем колесо
-            // -------------------------------------------------
-
-            Log(
-                "Нажимаем колесо мыши...");
-
-            mouse_event(
-                MOUSEEVENTF_MIDDLEDOWN,
-                0,
-                0,
-                0,
-                UIntPtr.Zero);
-
-            await Task.Delay(100);
-
-            mouse_event(
-                MOUSEEVENTF_MIDDLEUP,
-                0,
-                0,
-                0,
-                UIntPtr.Zero);
-
-            Log(
-                "Колесо нажато.");
-
-            // -------------------------------------------------
-            // 6. Ждём новое окно
-            // -------------------------------------------------
-
-            Log(
-                "Ждём появления нового окна LM Viewer...");
-
-            IntPtr newWindow =
-                IntPtr.Zero;
-
-            for (int i = 0; i < 30; i++)
-            {
-                await Task.Delay(200);
-
-                HashSet<IntPtr> after =
-                    GetVisibleLmViewerWindows();
-
-                foreach (IntPtr hWnd in after)
+            EnumWindows(
+                (hWnd, _) =>
                 {
-                    if (!before.Contains(hWnd) &&
-                        hWnd != originalWindow)
+                    if (!IsWindowVisible(hWnd))
                     {
-                        newWindow = hWnd;
-
-                        break;
+                        return true;
                     }
-                }
 
-                if (newWindow !=
-                    IntPtr.Zero)
-                {
-                    break;
-                }
-            }
+                    StringBuilder title =
+                        new StringBuilder(512);
 
-            // -------------------------------------------------
-            // 7. Проверяем новое окно
-            // -------------------------------------------------
+                    StringBuilder className =
+                        new StringBuilder(512);
 
-            if (newWindow ==
-                IntPtr.Zero)
-            {
-                Log(
-                    "ОШИБКА: новое окно LM Viewer не появилось.");
+                    GetWindowText(
+                        hWnd,
+                        title,
+                        title.Capacity);
 
-                MessageBox.Show(
-                    "Новое окно LM Viewer не обнаружено.",
-                    "BFN Exporter",
-                    MessageBoxButtons.OK,
-                    MessageBoxIcon.Warning);
+                    GetClassName(
+                        hWnd,
+                        className,
+                        className.Capacity);
 
-                return;
-            }
+                    string windowTitle =
+                        title.ToString().Trim();
 
-            StringBuilder newTitle =
-                new StringBuilder(512);
+                    string windowClass =
+                        className.ToString().Trim();
 
-            GetWindowText(
-                newWindow,
-                newTitle,
-                newTitle.Capacity);
+                    if (string.IsNullOrWhiteSpace(
+                            windowTitle))
+                    {
+                        return true;
+                    }
 
+                    count++;
+
+                    Log(
+                        $"#{count} | " +
+                        $"HWND={hWnd} | " +
+                        $"Title=\"{windowTitle}\" | " +
+                        $"Class=\"{windowClass}\"");
+
+                    return true;
+                },
+                IntPtr.Zero);
+
+            Log("");
             Log(
-                $"Новое окно найдено: {newWindow}");
-
-            Log(
-                $"Заголовок нового окна: {newTitle}");
-
-            // -------------------------------------------------
-            // 8. Разворачиваем НОВОЕ окно
-            // -------------------------------------------------
-
-            Log(
-                "Разворачиваем именно новое окно LM Viewer...");
-
-            ShowWindow(
-                newWindow,
-                SW_MAXIMIZE);
-
-            await Task.Delay(1000);
-
-            Log(
-                "Новое окно LM Viewer развернуто.");
-
-            Log(
-                "Исходное окно LM Viewer не трогалось.");
-
-            Log(
-                "ТЕСТ ЗАВЕРШЁН.");
-
-            MessageBox.Show(
-                "Тест выполнен.\n\n" +
-                "Новое окно LM Viewer найдено и развернуто.\n\n" +
-                "Исходное окно не трогалось.\n\n" +
-                "Новое окно пока НЕ закрывается.",
-                "BFN Exporter",
-                MessageBoxButtons.OK,
-                MessageBoxIcon.Information);
+                $"Всего найдено видимых окон с заголовком: {count}");
+            Log("========================================");
+            Log("ДИАГНОСТИКА ЗАВЕРШЕНА");
+            Log("========================================");
         }
         catch (Exception ex)
         {
             Log(
-                "Ошибка теста LM Viewer: " +
+                "Ошибка диагностики окон: " +
                 ex.Message);
-
-            MessageBox.Show(
-                ex.Message,
-                "Ошибка LM Viewer",
-                MessageBoxButtons.OK,
-                MessageBoxIcon.Error);
-        }
-        finally
-        {
-            lmViewerTestButton.Enabled = true;
         }
     }
 
@@ -853,7 +546,7 @@ public sealed class MainForm : Form
     }
 
     // =========================================================
-    // ЗАКРЫТИЕ ФОРМЫ
+    // ЗАКРЫТИЕ
     // =========================================================
 
     protected override void OnFormClosed(
@@ -969,22 +662,18 @@ public sealed class MainForm : Form
         exportButton.Enabled = false;
         cancelButton.Enabled = true;
         screenSelector.Enabled = false;
-        lmViewerTestButton.Enabled = false;
+        windowsTestButton.Enabled = false;
 
         instruction.Text =
             $"«{screen}»: наведи мышь на «{pointNames[0]}» и нажми F8.";
 
         Log("");
-
         Log(
             $"--- Начата настройка координат: {screen} ---");
-
         Log(
             "F8 — сохранить текущую позицию мыши.");
-
         Log(
             "ESC — отменить настройку.");
-
         Log(
             $"Нужно сохранить {pointNames.Length} координат.");
     }
@@ -1008,7 +697,7 @@ public sealed class MainForm : Form
         exportButton.Enabled = true;
         cancelButton.Enabled = false;
         screenSelector.Enabled = true;
-        lmViewerTestButton.Enabled = true;
+        windowsTestButton.Enabled = true;
 
         instruction.Text =
             "Настройка отменена.";
@@ -1029,7 +718,6 @@ public sealed class MainForm : Form
             setupIndex >= 0)
         {
             e.SuppressKeyPress = true;
-
             CapturePoint();
         }
 
@@ -1095,7 +783,7 @@ public sealed class MainForm : Form
             exportButton.Enabled = true;
             cancelButton.Enabled = false;
             screenSelector.Enabled = true;
-            lmViewerTestButton.Enabled = true;
+            windowsTestButton.Enabled = true;
 
             instruction.Text =
                 $"Готово! 9 координат для «{screen}» сохранены.";
@@ -1357,7 +1045,6 @@ public sealed class MainForm : Form
         CheckCancellation(token);
 
         Log("");
-
         Log(
             $"[{screen}] Запускаем: {reportPoint}");
 
@@ -1386,7 +1073,6 @@ public sealed class MainForm : Form
         CheckCancellation(token);
 
         Log("");
-
         Log(
             $"[{screen}] Сохраняем: {fileName}");
 
@@ -1474,7 +1160,7 @@ public sealed class MainForm : Form
     }
 
     // =========================================================
-    // FILE NAMES
+    // ИМЕНА ФАЙЛОВ
     // =========================================================
 
     private string ProductionFile(
@@ -1508,7 +1194,7 @@ public sealed class MainForm : Form
     }
 
     // =========================================================
-    // VALIDATE
+    // ПРОВЕРКА КООРДИНАТ
     // =========================================================
 
     private void ValidateAllCoordinates()
@@ -1524,25 +1210,22 @@ public sealed class MainForm : Form
     }
 
     // =========================================================
-    // LOG ROUND
+    // ЗАГОЛОВОК ЖУРНАЛА
     // =========================================================
 
     private void LogRound(
         string title)
     {
         Log("");
-
         Log(
             "========================================");
-
         Log(title);
-
         Log(
             "========================================");
     }
 
     // =========================================================
-    // EXPORT ALL
+    // ЭКСПОРТ ВСЕХ ЭКРАНОВ
     // =========================================================
 
     private async Task ExportAllScreens()
@@ -1587,16 +1270,12 @@ public sealed class MainForm : Form
         try
         {
             Log("");
-
             Log(
                 "========================================");
-
             Log(
                 "НАЧАЛО КОНВЕЙЕРНОЙ ВЫГРУЗКИ");
-
             Log(
                 "4 ЭКРАНА × 3 ОТЧЁТА");
-
             Log(
                 "========================================");
 
@@ -1725,16 +1404,12 @@ public sealed class MainForm : Form
             }
 
             Log("");
-
             Log(
                 "========================================");
-
             Log(
                 "ВСЕ 4 ЭКРАНА УСПЕШНО ВЫГРУЖЕНЫ");
-
             Log(
                 "ВСЕ ЭКРАНЫ ВОЗВРАЩЕНЫ В ИСХОДНОЕ СОСТОЯНИЕ");
-
             Log(
                 "========================================");
 
@@ -1748,13 +1423,10 @@ public sealed class MainForm : Form
         catch (OperationCanceledException)
         {
             Log("");
-
             Log(
                 "========================================");
-
             Log(
                 "ОПЕРАЦИЯ ОТМЕНЕНА ПОЛЬЗОВАТЕЛЕМ");
-
             Log(
                 "========================================");
 
@@ -1767,16 +1439,12 @@ public sealed class MainForm : Form
         catch (Exception ex)
         {
             Log("");
-
             Log(
                 "========================================");
-
             Log(
                 "ОШИБКА ПРИ ВЫГРУЗКЕ");
-
             Log(
                 "========================================");
-
             Log(
                 ex.Message);
 
@@ -1801,7 +1469,7 @@ public sealed class MainForm : Form
     }
 
     // =========================================================
-    // CANCEL EXPORT
+    // ОТМЕНА
     // =========================================================
 
     private void CancelExport()
@@ -1812,7 +1480,6 @@ public sealed class MainForm : Form
         }
 
         Log("");
-
         Log(
             "Получена команда ОТМЕНА.");
 
@@ -1820,7 +1487,7 @@ public sealed class MainForm : Form
     }
 
     // =========================================================
-    // RUNNING STATE
+    // СОСТОЯНИЕ
     // =========================================================
 
     private void SetRunningState(
@@ -1848,7 +1515,7 @@ public sealed class MainForm : Form
         screenSelector.Enabled =
             !running;
 
-        lmViewerTestButton.Enabled =
+        windowsTestButton.Enabled =
             !running;
 
         if (running)
