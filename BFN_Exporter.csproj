@@ -1,10 +1,14 @@
 <Project Sdk="Microsoft.NET.Sdk">
+
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
-    <TargetFramework>net8.0-windows</TargetFramework>
+    <TargetFramework>net6.0-windows</TargetFramework>
     <UseWindowsForms>true</UseWindowsForms>
-    <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
-    <AssemblyName>BFN_Exporter</AssemblyName>
   </PropertyGroup>
-</Project>
+
+  <ItemGroup>
+    <PackageReference Include="System.Windows.Automation" Version="6.0.0" />
+  </ItemGroup>
+
+</Project>Project>
