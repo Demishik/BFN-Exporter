@@ -1,14 +1,10 @@
 <Project Sdk="Microsoft.NET.Sdk">
-
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
     <TargetFramework>net6.0-windows</TargetFramework>
     <UseWindowsForms>true</UseWindowsForms>
-    <Nullable>enable</Nullable>
   </PropertyGroup>
-
   <ItemGroup>
     <PackageReference Include="System.Windows.Automation" Version="6.0.0" />
   </ItemGroup>
-
-</Project>Project>
+</Project>
