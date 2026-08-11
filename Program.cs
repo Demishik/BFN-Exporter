@@ -502,7 +502,7 @@ public sealed class MainForm : Form
         log.Font = new Font("Consolas", 8.5f);
         log.BackColor = Color.FromArgb(22, 25, 30);
         log.ForeColor = Color.FromArgb(205, 210, 215);
-        log.BorderStyle = BorderStyle.FixedSingle;
+        log.BorderStyle = System.Windows.Forms.BorderStyle.FixedSingle;
         journalPanel.Controls.Add(log);
 
         // -----------------------------------------------------
