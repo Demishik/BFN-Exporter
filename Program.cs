@@ -2739,9 +2739,9 @@ public sealed class MainForm : Form
         string productionDestinationStem =
             $"{yesterday:yyyy_MM_dd}_Катковка Каргалей и Ольгино. Производственный отчет_";
         string damateDestinationStem =
-            $"{yesterday:yyyy_MM_dd} Катковка Каргалей и Ольгино Damate Qlik";
+            $"{yesterday:yyyy_MM_dd}_Катковка Каргалей и Ольгино Damate Qlik";
         string bunkerDestinationStem =
-            $"{today:yyyy_MM_dd} Катковка Каргалей и Ольгино. Остаток корма на 00-00";
+            $"{today:yyyy_MM_dd}_Катковка Каргалей и Ольгино. Остаток корма на 00-00";
 
         exportRunning = true;
         exportCancellation = new CancellationTokenSource();
