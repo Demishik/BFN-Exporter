@@ -2741,7 +2741,7 @@ public sealed class MainForm : Form
         string damateDestinationStem =
             $"{yesterday:yyyy_MM_dd}_Катковка Каргалей и Ольгино Damate Qlik";
         string bunkerDestinationStem =
-            $"{today:yyyy_MM_dd}_Катковка Каргалей и Ольгино. Остаток корма на 00-00";
+            $"{today:yyyy_MM_dd}_Катковка Каргалей Ольгино. Остаток корма на 00-00";
 
         exportRunning = true;
         exportCancellation = new CancellationTokenSource();
