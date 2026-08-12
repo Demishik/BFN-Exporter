@@ -3335,7 +3335,7 @@ public sealed class MainForm : Form
                 break;
 
             case CellType.Error:
-                destination.SetCellErrorValue(source.ErrorCellValue);
+                destination.SetCellErrorValue((byte)value.ErrorValue);
                 break;
 
             case CellType.Formula:
@@ -3364,7 +3364,7 @@ public sealed class MainForm : Form
                             break;
 
                         case CellType.Error:
-                            destination.SetCellErrorValue(value.ErrorValue);
+                            destination.SetCellErrorValue((byte)source.ErrorCellValue);
                             break;
 
                         default:
