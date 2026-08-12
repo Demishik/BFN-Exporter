@@ -2746,7 +2746,7 @@ public sealed class MainForm : Form
         string bunkerFolder = Path.Combine(BunkerRootFolder, year, monthFolder);
 
         string productionDestinationStem =
-            $"{yesterday:yyyy_MM_dd}_Катковка Каргалей и Ольгино. Производственный_";
+            $"{yesterday:yyyy_MM_dd}_Катковка Каргалей и Ольгино. Производственный отчет_";
         string damateDestinationStem =
             $"{yesterday:yyyy_MM_dd}_Катковка Каргалей и Ольгино Damate Qlik";
         string bunkerDestinationStem =
